@@ -1,15 +1,20 @@
-// Todas las llamadas al microservicio de "Check-in" (Grupo 5) van acá.
-// Nada de fetch/axios sueltos dentro de los componentes: siempre
-// pasan por este archivo para mantener la lógica de red en un
-// solo lugar y facilitar el testing/debug.
+// ============================================================================
+// modules/checkin/api.ts
+// ----------------------------------------------------------------------------
+// Todas las llamadas de este módulo pasan por el API Gateway, nunca
+// directo al microservicio de checkin. El Gateway es quien enruta
+// internamente la petición al servicio correcto según el path.
+// ============================================================================
 
-import { API_URLS } from "@/lib/env";
+import { GATEWAY_URL } from "@/lib/env";
 
-const BASE_URL = API_URLS.checkin;
+const BASE_PATH = "/api/checkin";
 
-// Ejemplo de función — bórrenla y reemplácenla por las suyas
-export async function ejemploFetchCheckinPage() {
-  const res = await fetch(`${BASE_URL}/checkin`);
-  if (!res.ok) throw new Error("Error al consultar el servicio de Check-in");
+// Ejemplo de función — reemplacen/agreguen las que su módulo necesite.
+export async function ejemploFetch() {
+  const res = await fetch(`${GATEWAY_URL}${BASE_PATH}/`);
+  if (!res.ok) {
+    throw new Error("Error al conectar con el módulo de checkin a través del Gateway");
+  }
   return res.json();
 }

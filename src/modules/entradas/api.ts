@@ -1,15 +1,26 @@
-// Todas las llamadas al microservicio de "Entradas / Inventario" (Grupo 3) van acá.
-// Nada de fetch/axios sueltos dentro de los componentes: siempre
-// pasan por este archivo para mantener la lógica de red en un
-// solo lugar y facilitar el testing/debug.
+// ============================================================================
+// modules/entradas/api.ts
+// ----------------------------------------------------------------------------
+// Llamadas del módulo de Entradas/Inventario (Grupo 3), a través del API Gateway.
+// ============================================================================
 
-import { API_URLS } from "@/lib/env";
+import { GATEWAY_URL } from "@/lib/env";
 
-const BASE_URL = API_URLS.entradas;
+const BASE_PATH = "/api/entradas";
 
-// Ejemplo de función — bórrenla y reemplácenla por las suyas
-export async function ejemploFetchEntradasPage() {
-  const res = await fetch(`${BASE_URL}/entradas`);
-  if (!res.ok) throw new Error("Error al consultar el servicio de Entradas / Inventario");
+// Ejemplo de función — reemplacen/agreguen las que su módulo necesite.
+export async function ejemploFetch() {
+  const res = await fetch(`${GATEWAY_URL}${BASE_PATH}/`);
+  if (!res.ok) {
+    throw new Error("Error al conectar con el módulo de entradas a través del Gateway");
+  }
+  return res.json();
+}
+
+// Usada por Catálogo (Grupo 2) para mostrar disponibilidad en el detalle
+// de un evento. Ver modules/entradas/components/DisponibilidadPlaceholder.tsx
+export async function obtenerDisponibilidad(eventoId: string) {
+  const res = await fetch(`${GATEWAY_URL}${BASE_PATH}/eventos/${eventoId}/disponibilidad`);
+  if (!res.ok) throw new Error("Error al obtener la disponibilidad de entradas");
   return res.json();
 }

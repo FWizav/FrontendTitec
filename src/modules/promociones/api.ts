@@ -1,15 +1,26 @@
-// Todas las llamadas al microservicio de "Promociones" (Grupo 9) van acá.
-// Nada de fetch/axios sueltos dentro de los componentes: siempre
-// pasan por este archivo para mantener la lógica de red en un
-// solo lugar y facilitar el testing/debug.
+// ============================================================================
+// modules/promociones/api.ts
+// ----------------------------------------------------------------------------
+// Llamadas del módulo de Promociones (Grupo 9), a través del API Gateway.
+// ============================================================================
 
-import { API_URLS } from "@/lib/env";
+import { GATEWAY_URL } from "@/lib/env";
 
-const BASE_URL = API_URLS.promociones;
+const BASE_PATH = "/api/promociones";
 
-// Ejemplo de función — bórrenla y reemplácenla por las suyas
-export async function ejemploFetchPromocionesPage() {
-  const res = await fetch(`${BASE_URL}/promociones`);
-  if (!res.ok) throw new Error("Error al consultar el servicio de Promociones");
+// Ejemplo de función — reemplacen/agreguen las que su módulo necesite.
+export async function ejemploFetch() {
+  const res = await fetch(`${GATEWAY_URL}${BASE_PATH}/`);
+  if (!res.ok) {
+    throw new Error("Error al conectar con el módulo de promociones a través del Gateway");
+  }
+  return res.json();
+}
+
+// Usada por Catálogo (Grupo 2) para mostrar promociones activas en el
+// detalle de un evento. Ver modules/promociones/components/PromocionPlaceholder.tsx
+export async function obtenerPromocionesDeEvento(eventoId: string) {
+  const res = await fetch(`${GATEWAY_URL}${BASE_PATH}/eventos/${eventoId}/promociones`);
+  if (!res.ok) throw new Error("Error al obtener las promociones del evento");
   return res.json();
 }

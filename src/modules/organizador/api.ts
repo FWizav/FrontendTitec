@@ -1,15 +1,20 @@
-// Todas las llamadas al microservicio de "Panel Organizador" (Grupo 7) van acá.
-// Nada de fetch/axios sueltos dentro de los componentes: siempre
-// pasan por este archivo para mantener la lógica de red en un
-// solo lugar y facilitar el testing/debug.
+// ============================================================================
+// modules/organizador/api.ts
+// ----------------------------------------------------------------------------
+// Todas las llamadas de este módulo pasan por el API Gateway, nunca
+// directo al microservicio de organizador. El Gateway es quien enruta
+// internamente la petición al servicio correcto según el path.
+// ============================================================================
 
-import { API_URLS } from "@/lib/env";
+import { GATEWAY_URL } from "@/lib/env";
 
-const BASE_URL = API_URLS.organizador;
+const BASE_PATH = "/api/organizador";
 
-// Ejemplo de función — bórrenla y reemplácenla por las suyas
-export async function ejemploFetchOrganizadorPage() {
-  const res = await fetch(`${BASE_URL}/organizador`);
-  if (!res.ok) throw new Error("Error al consultar el servicio de Panel Organizador");
+// Ejemplo de función — reemplacen/agreguen las que su módulo necesite.
+export async function ejemploFetch() {
+  const res = await fetch(`${GATEWAY_URL}${BASE_PATH}/`);
+  if (!res.ok) {
+    throw new Error("Error al conectar con el módulo de organizador a través del Gateway");
+  }
   return res.json();
 }
