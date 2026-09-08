@@ -1,4 +1,4 @@
-# Plataforma de Eventos — Front-end
+# TicketU — Front-end
 
 Este repositorio es la **base común del front-end**, entregada por el *platform team*.
 Está hecha en **Next.js** (un framework construido sobre React, que además trae el sistema
