@@ -6,6 +6,7 @@ import NotificacionesPlaceholder from "@/modules/notificaciones/components/Notif
 // desde src/modules/notificaciones/. Toda la lógica (llamadas a la API,
 // estado, formularios, etc.) vive en esa carpeta, NO acá.
 
+//HU3: Ver centro de notificaciones
 export default function NotificacionesPage() {
   return <NotificacionesPlaceholder />;
 }
