@@ -6,12 +6,22 @@
 // resumidas, entradas disponibles). NO crea/modifica/elimina eventos.
 // ============================================================================
 
-export default function CatalogoPlaceholder() {
-  return (
-    <div>
-      <h1>Catálogo de eventos</h1>
-      <p>Buscador de eventos futuros y pasados.</p>
-      <p><em>Reemplacen este contenido por el buscador real.</em></p>
-    </div>
-  );
+import { buscarEventos } from "../api";
+import CatalogoVista from "./CatalogoVista";
+import { poppins, inter } from "../styles/fonts";
+import styles from "../styles/catalogo.module.css";
+
+export default async function CatalogoPlaceholder() {
+    try {
+        const eventos = await buscarEventos();
+        return <CatalogoVista eventos={eventos} />;
+    } catch {
+        return (
+            <div className={`${styles.catalogo} ${poppins.variable} ${inter.variable}`}>
+                <div className={styles.errorCarga}>
+                    No pudimos cargar los eventos. Intenta nuevamente en unos minutos.
+                </div>
+            </div>
+        );
+    }
 }
