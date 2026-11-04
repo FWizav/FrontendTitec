@@ -1,11 +1,17 @@
-import PagosPlaceholder from "@/modules/pagos/components/PagosPlaceholder";
+import { Suspense } from "react";
+import CheckoutPage from "@/modules/pagos/components/CheckoutPage";
 
 // Página de "Pagos" — GRUPO 4
 //
-// Este archivo debería ser corto: solo importa y compone componentes
-// desde src/modules/pagos/. Toda la lógica (llamadas a la API,
-// estado, formularios, etc.) vive en esa carpeta, NO acá.
+// Checkout del módulo de Pagos. Entradas redirige aquí con la url_checkout que entrega
+// el backend de Pagos: /pagos?id_pago=<id>. Toda la lógica vive en src/modules/pagos/.
+//
+// useSearchParams (lectura de ?id_pago=) necesita un límite de Suspense en Next.js.
 
 export default function PagosPage() {
-  return <PagosPlaceholder />;
+  return (
+    <Suspense>
+      <CheckoutPage />
+    </Suspense>
+  );
 }
