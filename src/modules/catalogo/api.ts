@@ -9,10 +9,10 @@ import { eventosPrueba } from "./datosPrueba";
 import resenasPrueba from "./resenasPrueba.json";
 
 // Cambiar a false cuando el backend esté funcionando.
-const USAR_DATOS_PRUEBA = true;
+const USAR_DATOS_PRUEBA = false;
 
 // Simulación de la integración con Reseñas (Grupo 6).
-const USAR_DATOS_PRUEBA_RESENAS = true;
+const USAR_DATOS_PRUEBA_RESENAS = false;
 
 // TODO: el repo común usa "/api/catalogo/eventos" vía Gateway. Confirmar path final.
 const BASE_PATH = "/api/catalogo/eventos";
