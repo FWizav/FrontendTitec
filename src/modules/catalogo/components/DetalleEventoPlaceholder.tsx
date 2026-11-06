@@ -16,12 +16,11 @@
 // ============================================================================
 
 import Link from "next/link";
-import { obtenerEventoPorId, obtenerResenasEvento } from "../api";
+import { obtenerEventoPorId } from "../api";
 import type { Evento } from "../types";
 import { formatearFechaLarga, formatearPrecio, formatearNumero, esPasado } from "../formato";
 import ImagenEvento from "./ImagenEvento";
 import Estrellas from "./Estrellas";
-import ResumenResenas from "./ResumenResenas";
 import { poppins, inter } from "../styles/fonts";
 import styles from "../styles/catalogo.module.css";
 
@@ -31,13 +30,9 @@ export default async function DetalleEventoPlaceholder({
     eventoId: string;
 }) {
     let evento: Evento;
-    let resumenResenas;
 
     try {
-        [evento, resumenResenas] = await Promise.all([
-            obtenerEventoPorId(eventoId),
-            obtenerResenasEvento(eventoId)
-        ]);
+        evento = await obtenerEventoPorId(eventoId);
     } catch (error) {
         console.error("Error en detalle:", error);
         return (
@@ -331,15 +326,6 @@ export default async function DetalleEventoPlaceholder({
                 )}
             </section>
 
-            {/* g. Resumen de reseñas (HU6) */}
-            <div style={{ marginTop: 48, marginBottom: 48 }}>
-                <ResumenResenas 
-                    resumen={resumenResenas} 
-                    eventoId={eventoId} 
-                    imagenEvento={evento.imagen_evento} 
-                    tituloEvento={evento.nombre_evento} 
-                />
-            </div>
         </div>
     );
 }
