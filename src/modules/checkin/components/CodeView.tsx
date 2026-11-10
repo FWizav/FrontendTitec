@@ -12,9 +12,15 @@ interface CodeViewProps {
 
 export default function CodeView({ onBack, onScanResult }: CodeViewProps) {
   const [code, setCode] = useState("");
-  const [eventoId, setEventoId] = useState("EVT-2026-001");
+  const [eventoId, setEventoId] = useState("evt-77889");
   const [isLoading, setIsLoading] = useState(false);
   const [feedbackError, setFeedbackError] = useState("");
+
+  const seleccionarSemilla = (tk: string, evt: string) => {
+    setCode(tk);
+    setEventoId(evt);
+    setFeedbackError("");
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,7 +33,7 @@ export default function CodeView({ onBack, onScanResult }: CodeViewProps) {
     setIsLoading(true);
 
     try {
-      const result = await validarTicketCheckin(code.trim(), eventoId.trim() || "EVT-2026-001");
+      const result = await validarTicketCheckin(code.trim(), eventoId.trim() || "evt-77889");
       onScanResult(result);
     } catch (err) {
       setFeedbackError(err instanceof Error ? err.message : "Error al consultar el código.");
@@ -100,6 +106,42 @@ export default function CodeView({ onBack, onScanResult }: CodeViewProps) {
       <div style={wrapperStyle}>
         <h1 style={titleStyle}>Ingreso por código secreto</h1>
 
+        {/* Semillas rápidas oficiales de Grupo 5 */}
+        <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "8px" }}>
+          <button
+            type="button"
+            onClick={() => seleccionarSemilla("tk-998877", "evt-77889")}
+            style={{
+              padding: "4px 8px",
+              borderRadius: "6px",
+              border: "1px solid #D8DFF0",
+              backgroundColor: "#FFFFFF",
+              color: "#2F4374",
+              fontSize: "11px",
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            🎟️ tk-998877
+          </button>
+          <button
+            type="button"
+            onClick={() => seleccionarSemilla("tk-demo-001", "evt-002")}
+            style={{
+              padding: "4px 8px",
+              borderRadius: "6px",
+              border: "1px solid #D8DFF0",
+              backgroundColor: "#FFFFFF",
+              color: "#2F4374",
+              fontSize: "11px",
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            🎟️ tk-demo-001
+          </button>
+        </div>
+
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           <div>
             <label
@@ -112,14 +154,14 @@ export default function CodeView({ onBack, onScanResult }: CodeViewProps) {
                 marginBottom: "6px",
               }}
             >
-              Código de entrada
+              Código de entrada (id_entrada)
             </label>
             <input
               id="entry-code"
               type="text"
               value={code}
               onChange={(e) => setCode(e.target.value)}
-              placeholder="Ej: TK-84920"
+              placeholder="Ej: tk-998877 o tk-demo-001"
               autoComplete="off"
               autoCapitalize="none"
               spellCheck={false}
@@ -159,7 +201,7 @@ export default function CodeView({ onBack, onScanResult }: CodeViewProps) {
               type="text"
               value={eventoId}
               onChange={(e) => setEventoId(e.target.value)}
-              placeholder="EVT-2026-001"
+              placeholder="evt-77889 o evt-002"
               style={{
                 width: "100%",
                 height: "44px",

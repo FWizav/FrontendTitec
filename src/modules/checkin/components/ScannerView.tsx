@@ -19,6 +19,7 @@ export default function ScannerView({ onBack, onScan, onSimulateScan }: ScannerP
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
+  const [isValidating, setIsValidating] = useState(false);
   const [scannerSupported, setScannerSupported] = useState(true);
   const [attempt, setAttempt] = useState(0);
 
@@ -40,9 +41,10 @@ export default function ScannerView({ onBack, onScan, onSimulateScan }: ScannerP
 
   // Procesar código leído
   const handleDecodedQR = useCallback(
-    (qrContent: string) => {
+    async (qrContent: string) => {
       // Detener cámara al leer exitosamente
       stopCamera();
+      setIsValidating(true);
 
       // Haptic feedback si está disponible
       if (typeof navigator !== "undefined" && navigator.vibrate) {
@@ -53,8 +55,12 @@ export default function ScannerView({ onBack, onScan, onSimulateScan }: ScannerP
         }
       }
 
-      const result = procesarLecturaQR(qrContent);
-      onScan(result);
+      try {
+        const result = await procesarLecturaQR(qrContent);
+        onScan(result);
+      } finally {
+        setIsValidating(false);
+      }
     },
     [stopCamera, onScan]
   );
@@ -150,29 +156,30 @@ export default function ScannerView({ onBack, onScan, onSimulateScan }: ScannerP
     };
   }, [attempt, handleDecodedQR, stopCamera]);
 
-  // Simulación de prueba rápida
-  const handleSimular = (tipo: "valido" | "invalido") => {
+  // Simulación de prueba rápida con semillas oficiales Grupo 5
+  const handleSimular = (tipo: "valido" | "invalido" | "demo2") => {
     if (tipo === "valido") {
       if (onSimulateScan) onSimulateScan("accepted");
       handleDecodedQR(
         JSON.stringify({
-          id_entrada: "TK-78429",
-          id_evento: "EVT-2026-001",
-          nombre_usuario: "Sofía Valenzuela",
-          nombre_evento: "Conferencia Anual de Tecnología 2026",
-          direccion: "Auditorio Central, Campus Tecnológico",
-          fecha: new Date().toLocaleDateString("es-CL"),
-          hora_inicio: "09:30 hrs",
-          hora_cierre: "18:00 hrs",
+          id_entrada: "tk-998877",
+          id_evento: "evt-77889",
+        })
+      );
+    } else if (tipo === "demo2") {
+      if (onSimulateScan) onSimulateScan("accepted");
+      handleDecodedQR(
+        JSON.stringify({
+          id_entrada: "tk-demo-001",
+          id_evento: "evt-002",
         })
       );
     } else {
       if (onSimulateScan) onSimulateScan("rejected");
       handleDecodedQR(
         JSON.stringify({
-          id_entrada: "TK-INVALIDO-99",
-          id_evento: "EVT-2026-001",
-          error: "Entrada no existente en el registro.",
+          id_entrada: "tk-RECHAZADO-99",
+          id_evento: "evt-77889",
         })
       );
     }
@@ -432,13 +439,15 @@ export default function ScannerView({ onBack, onScan, onSimulateScan }: ScannerP
             Pruebas de escaneo rápido:
           </div>
 
-          {/* Botones de simulación para desarrollo y pruebas */}
-          <div style={{ display: "flex", gap: "8px" }}>
+          {/* Botones de prueba con QR real / semillas oficiales Grupo 5 */}
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
             <button
               type="button"
+              disabled={isValidating}
               onClick={() => handleSimular("valido")}
               style={{
                 flex: 1,
+                minWidth: "130px",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -450,18 +459,47 @@ export default function ScannerView({ onBack, onScan, onSimulateScan }: ScannerP
                 padding: "8px 12px",
                 fontSize: "12px",
                 fontWeight: 600,
-                cursor: "pointer",
+                cursor: isValidating ? "wait" : "pointer",
+                opacity: isValidating ? 0.7 : 1,
               }}
             >
               <CheckCircle2 size={14} />
-              <span>Simular QR Válido</span>
+              <span>{isValidating ? "Validando..." : "QR tk-998877"}</span>
             </button>
 
             <button
               type="button"
+              disabled={isValidating}
+              onClick={() => handleSimular("demo2")}
+              style={{
+                flex: 1,
+                minWidth: "130px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "6px",
+                backgroundColor: "#1E429F",
+                color: "#E1EFFE",
+                border: "none",
+                borderRadius: "8px",
+                padding: "8px 12px",
+                fontSize: "12px",
+                fontWeight: 600,
+                cursor: isValidating ? "wait" : "pointer",
+                opacity: isValidating ? 0.7 : 1,
+              }}
+            >
+              <CheckCircle2 size={14} />
+              <span>QR tk-demo-001</span>
+            </button>
+
+            <button
+              type="button"
+              disabled={isValidating}
               onClick={() => handleSimular("invalido")}
               style={{
                 flex: 1,
+                minWidth: "120px",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -473,11 +511,12 @@ export default function ScannerView({ onBack, onScan, onSimulateScan }: ScannerP
                 padding: "8px 12px",
                 fontSize: "12px",
                 fontWeight: 600,
-                cursor: "pointer",
+                cursor: isValidating ? "wait" : "pointer",
+                opacity: isValidating ? 0.7 : 1,
               }}
             >
               <XCircle size={14} />
-              <span>Simular QR Inválido</span>
+              <span>QR Rechazado</span>
             </button>
           </div>
         </div>
