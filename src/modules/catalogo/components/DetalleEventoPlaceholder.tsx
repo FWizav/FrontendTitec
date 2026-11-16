@@ -16,12 +16,12 @@
 // ============================================================================
 
 import Link from "next/link";
-import { obtenerEventoPorId, obtenerResenasEvento } from "../api";
+import { obtenerEventoPorId } from "../api";
 import type { Evento } from "../types";
-import { formatearFechaLarga, formatearPrecio, formatearNumero, esPasado } from "../formato";
+import { formatearFechaLarga, esPasado } from "../formato";
 import ImagenEvento from "./ImagenEvento";
 import Estrellas from "./Estrellas";
-import ResumenResenas from "./ResumenResenas";
+import DisponibilidadPlaceholder from "@/modules/entradas/components/DisponibilidadPlaceholder";
 import { poppins, inter } from "../styles/fonts";
 import styles from "../styles/catalogo.module.css";
 
@@ -31,13 +31,9 @@ export default async function DetalleEventoPlaceholder({
     eventoId: string;
 }) {
     let evento: Evento;
-    let resumenResenas;
 
     try {
-        [evento, resumenResenas] = await Promise.all([
-            obtenerEventoPorId(eventoId),
-            obtenerResenasEvento(eventoId)
-        ]);
+        evento = await obtenerEventoPorId(eventoId);
     } catch (error) {
         console.error("Error en detalle:", error);
         return (
@@ -60,8 +56,6 @@ export default async function DetalleEventoPlaceholder({
     const esAgotado = evento.estado_evento === "agotado";
     const esCancelado = evento.estado_evento === "cancelado";
     const esAtenuada = esAgotado || esCancelado || eventoEsPasado;
-    const precioTexto = formatearPrecio(evento.precio_final_evento);
-    const precioEsGratis = precioTexto === "Gratis";
 
     return (
         <div
@@ -105,19 +99,18 @@ export default async function DetalleEventoPlaceholder({
 
                 {(esAgotado || esCancelado || eventoEsPasado) && (
                     <span
-                        className={`${styles.badgeEstadoDetalle} ${
-                            esAgotado
+                        className={`${styles.badgeEstadoDetalle} ${esAgotado
                                 ? styles.badgeAgotado
                                 : esCancelado
-                                ? styles.badgeCancelado
-                                : styles.badgePasado
-                        }`}
+                                    ? styles.badgeCancelado
+                                    : styles.badgePasado
+                            }`}
                     >
-                        {esAgotado 
-                            ? "Agotado" 
-                            : esCancelado 
-                            ? "Cancelado" 
-                            : "Pasado"}
+                        {esAgotado
+                            ? "Agotado"
+                            : esCancelado
+                                ? "Cancelado"
+                                : "Pasado"}
                     </span>
                 )}
 
@@ -224,122 +217,32 @@ export default async function DetalleEventoPlaceholder({
                         <dt className={styles.etiquetaDato}>Horario:</dt>
                         <dd className={styles.valorDato}>{evento.hora_evento} hrs</dd>
                     </div>
-
-                    <div className={styles.filaDato}>
-                        <span className={styles.iconoDato}>
-                            <svg
-                                width="20"
-                                height="20"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                aria-hidden="true"
-                            >
-                                <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
-                                <line x1="7" y1="7" x2="7.01" y2="7" />
-                            </svg>
-                        </span>
-                        <dt className={styles.etiquetaDato}>Precio:</dt>
-                        <dd
-                            className={`${styles.valorDato} ${
-                                precioEsGratis ? styles.precioGratis : ""
-                            }`}
-                        >
-                            {precioTexto}
-                        </dd>
-                    </div>
-
-                    {!eventoEsPasado && !esCancelado && (
-                        <div className={styles.filaDato}>
-                            <span className={styles.iconoDato}>
-                                <svg
-                                    width="20"
-                                    height="20"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="2"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    aria-hidden="true"
-                                >
-                                    <path d="M15 5v2" />
-                                    <path d="M15 11v2" />
-                                    <path d="M15 17v2" />
-                                    <path d="M5 5h14a2 2 0 0 1 2 2v3a2 2 0 0 0 0 4v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3a2 2 0 0 0 0-4V7a2 2 0 0 1 2-2z" />
-                                </svg>
-                            </span>
-                            <dt className={styles.etiquetaDato}>Entradas disponibles:</dt>
-                            <dd
-                                className={`${styles.valorDato} ${
-                                    evento.stock_actual === 0 ? styles.badgeAgotado : ""
-                                }`}
-                                style={evento.stock_actual === 0 ? { color: "var(--color-peligro-texto)", fontWeight: 600 } : {}}
-                            >
-                                {evento.stock_actual === 0 ? "Agotadas" : formatearNumero(evento.stock_actual)}
-                            </dd>
-                        </div>
-                    )}
                 </dl>
             </section>
 
-            {/* El bloque de Reseñas NO se importa acá: vive en su propia ruta
-          anidada /catalogo/[eventoId]/resenas (Grupo 6), no como componente
-          embebido, porque incluye un formulario de creación/edición completo. */}
-
-            {/* f. Sección de compra */}
-            <section className={styles.seccionCompra} aria-label="Comprar entradas">
-                {!esCancelado && (
-                    <p className={styles.textoCompraEncabezado}>¡Consigue tu entrada aquí!</p>
-                )}
-
-                {!esAgotado && !esCancelado && !eventoEsPasado ? (
-                    // TODO: confirmar con el Grupo 3 (Entradas) la ruta y el parámetro del flujo de compra.
-                    <Link
-                        href={`/entradas?eventoId=${encodeURIComponent(evento.id_evento)}`}
-                        className={styles.botonCompra}
-                    >
-                        {evento.tipo_evento === "gratuito" ? "Reservar" : "Comprar"}
-                    </Link>
-                ) : esCancelado ? (
-                    <>
-                        <div className={styles.etiquetaCanceladoPill}>
-                            Evento cancelado
-                        </div>
+            {/* e. Bloque oficial de Disponibilidad, Precio y Compra del Módulo Entradas (Grupo 3) */}
+            {!eventoEsPasado && !esCancelado ? (
+                <div style={{ marginTop: 24, marginBottom: 24 }}>
+                    <DisponibilidadPlaceholder eventoId={evento.id_evento} />
+                </div>
+            ) : (
+                <section className={styles.seccionCompra} aria-label="Estado del evento">
+                    {esCancelado ? (
+                        <>
+                            <div className={styles.etiquetaCanceladoPill}>
+                                Evento cancelado
+                            </div>
+                            <p className={styles.textoEstadoAviso}>
+                                Este evento fue cancelado por el organizador.
+                            </p>
+                        </>
+                    ) : (
                         <p className={styles.textoEstadoAviso}>
-                            Este evento fue cancelado por el organizador.
+                            Este evento ya se realizó.
                         </p>
-                    </>
-                ) : (
-                    <>
-                        <button
-                            type="button"
-                            disabled
-                            className={`${styles.botonCompra} ${styles.botonCompraDeshabilitado}`}
-                        >
-                            {evento.tipo_evento === "gratuito" ? "Reservar" : "Comprar"}
-                        </button>
-                        <p className={styles.textoEstadoAviso}>
-                            {esAgotado
-                                ? "Las entradas para este evento están agotadas."
-                                : "Este evento ya se realizó."}
-                        </p>
-                    </>
-                )}
-            </section>
-
-            {/* g. Resumen de reseñas (HU6) */}
-            <div style={{ marginTop: 48, marginBottom: 48 }}>
-                <ResumenResenas 
-                    resumen={resumenResenas} 
-                    eventoId={eventoId} 
-                    imagenEvento={evento.imagen_evento} 
-                    tituloEvento={evento.nombre_evento} 
-                />
-            </div>
+                    )}
+                </section>
+            )}
         </div>
     );
 }
