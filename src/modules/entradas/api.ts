@@ -2,63 +2,132 @@
 // modules/entradas/api.ts
 // ----------------------------------------------------------------------------
 // Capa de API para el Microservicio de Entradas e Inventario (Grupo 3).
-// Se conecta a través del API Gateway (lib/env.ts) hacia:
-//   - entradas-service (MongoDB)
-//   - checkin-service (MySQL)
+// Obtiene los eventos desde Catálogo (/api/catalogo/eventos) y opera reservas/
+// emisión/disponibilidad contra Entradas (/api/entradas) vía API Gateway.
+// Sin datos mock ni fallbacks locales.
 // ============================================================================
 
 import { GATEWAY_URL } from "@/lib/env";
-import { EventoEntradas, ReservaTemporal, EntradaEmitida, PromocionAplicada } from "./types";
-import { MOCK_EVENTOS_ENTRADAS, MOCK_PROMOCIONES } from "./mockData";
+import {
+  EventoEntradas,
+  EstadoGestionEvento,
+  ReservaTemporal,
+  EntradaEmitida,
+  PromocionAplicada,
+} from "./types";
 
 const BASE_PATH = "/api/entradas";
+const CATALOGO_PATH = "/api/catalogo/eventos";
 
-let eventosLocal = [...MOCK_EVENTOS_ENTRADAS.map((e) => ({ ...e }))];
-let ticketsEmitidosLocal: Record<string, EntradaEmitida> = {};
+interface CatalogoEventoRaw {
+  id_evento: string;
+  nombre_evento: string;
+  descripcion_evento?: string;
+  lugar_evento?: string;
+  fecha_evento?: string;
+  hora_evento?: string;
+  precio_final_evento?: number;
+  tipo_evento?: string;
+  estado_evento?: string;
+  stock_actual?: number;
+  stock_inicial?: number;
+  maximo_ticket?: number;
+}
+
+function mapEstadoCatalogo(estado?: string): EstadoGestionEvento {
+  const norm = (estado || "").toLowerCase();
+  if (norm === "cancelado") return "CANCELADO";
+  if (norm === "pasado" || norm === "finalizado") return "FINALIZADO";
+  if (norm === "borrador") return "BORRADOR";
+  return "PUBLICADO";
+}
+
+function mapCatalogoToEventoEntradas(ev: CatalogoEventoRaw): EventoEntradas {
+  const esGratuita = ev.tipo_evento === "gratuito" || Number(ev.precio_final_evento ?? 0) === 0;
+  const stockActual = Number(ev.stock_actual ?? 0);
+  const stockTotal = Number(ev.stock_inicial ?? stockActual);
+
+  return {
+    id: ev.id_evento,
+    titulo: ev.nombre_evento,
+    fecha: ev.fecha_evento
+      ? new Date(ev.fecha_evento).toLocaleDateString("es-CL", {
+          day: "2-digit",
+          month: "long",
+          year: "numeric",
+        })
+      : "Por confirmar",
+    hora: ev.hora_evento || "Por confirmar",
+    lugar: ev.lugar_evento || "Por confirmar",
+    descripcion: ev.descripcion_evento,
+    tipoEntrada: esGratuita ? "GRATUITA" : "PAGADA",
+    precio: esGratuita ? 0 : Number(ev.precio_final_evento ?? 0),
+    stockTotal: stockTotal > 0 ? stockTotal : stockActual,
+    stockDisponible: stockActual,
+    maxTickets: Number(ev.maximo_ticket ?? 6),
+    limiteGratuitoUsuario: esGratuita ? 2 : undefined,
+    estadoGestion: mapEstadoCatalogo(ev.estado_evento),
+  };
+}
 
 /**
- * Obtiene la lista completa de eventos con su stock y aforo disponible desde MongoDB (HU-01)
+ * Obtiene la lista de eventos desde el microservicio de Catálogo vía API Gateway.
  */
 export async function obtenerEventos(): Promise<EventoEntradas[]> {
-  try {
-    const res = await fetch(`${GATEWAY_URL}${BASE_PATH}/eventos`, {
-      method: "GET",
-      headers: { "Content-Type": "application/json" },
-      cache: "no-store",
-      signal: AbortSignal.timeout(3000),
-    });
-    if (res.ok) {
-      return await res.json();
-    }
-  } catch (error) {
-    console.warn("API Gateway no disponible, usando fallback local:", error);
+  const res = await fetch(`${GATEWAY_URL}${CATALOGO_PATH}?limite=100`, {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+    cache: "no-store",
+    signal: AbortSignal.timeout(5000),
+  });
+
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({}));
+    throw new Error(errBody?.message || `Error HTTP ${res.status} al cargar eventos desde Catálogo`);
   }
-  return eventosLocal;
+
+  const json = await res.json();
+  const lista: CatalogoEventoRaw[] = Array.isArray(json) ? json : json?.data || [];
+  return lista.map(mapCatalogoToEventoEntradas);
 }
 
 /**
- * Obtiene un evento específico por su ID desde MongoDB
+ * Obtiene un evento específico desde Catálogo y sincroniza su stock real con Entradas si está disponible.
  */
 export async function obtenerEventoPorId(eventoId: string): Promise<EventoEntradas | null> {
-  try {
-    const res = await fetch(`${GATEWAY_URL}${BASE_PATH}/eventos/${eventoId}`, {
-      method: "GET",
-      headers: { "Content-Type": "application/json" },
-      cache: "no-store",
-      signal: AbortSignal.timeout(3000),
-    });
-    if (res.ok) {
-      return await res.json();
-    }
-  } catch (error) {
-    console.warn("API Gateway no disponible para evento por ID, usando fallback local:", error);
+  const res = await fetch(`${GATEWAY_URL}${CATALOGO_PATH}/${encodeURIComponent(eventoId)}`, {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+    cache: "no-store",
+    signal: AbortSignal.timeout(5000),
+  });
+
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({}));
+    throw new Error(errBody?.message || `Error HTTP ${res.status} al consultar el evento en Catálogo`);
   }
-  return eventosLocal.find((e) => e.id === eventoId) || eventosLocal[0] || null;
+
+  const json = await res.json();
+  const raw: CatalogoEventoRaw = json?.data ?? json;
+  const evento = mapCatalogoToEventoEntradas(raw);
+
+  // Sincronizar stock en vivo desde Entradas si el evento existe en MongoDB de Entradas
+  try {
+    const disp = await obtenerDisponibilidad(eventoId);
+    evento.stockDisponible = disp.stockDisponible;
+    evento.stockTotal = disp.stockTotal;
+    evento.tipoEntrada = disp.tipoEntrada;
+    evento.precio = disp.precio;
+  } catch {
+    // Si Entradas aún no tiene el evento sincronizado, se mantiene el dato de Catálogo
+  }
+
+  return evento;
 }
 
 /**
- * Usada por Catálogo (Grupo 2) en su vista de Detalle de Evento.
- * Retorna resumen liviano de solo lectura sobre stock, tipo y precio único desde MongoDB.
+ * Consulta la disponibilidad en tiempo real desde Entradas (MongoDB).
  */
 export async function obtenerDisponibilidad(eventoId: string): Promise<{
   idEvento: string;
@@ -67,29 +136,17 @@ export async function obtenerDisponibilidad(eventoId: string): Promise<{
   tipoEntrada: "PAGADA" | "GRATUITA";
   precio: number;
 }> {
-  try {
-    const res = await fetch(`${GATEWAY_URL}${BASE_PATH}/eventos/${eventoId}/disponibilidad`, {
-      method: "GET",
-      headers: { "Content-Type": "application/json" },
-      cache: "no-store",
-      signal: AbortSignal.timeout(3000),
-    });
-    if (res.ok) {
-      return await res.json();
-    }
-  } catch (error) {
-    console.warn("API Gateway no disponible para disponibilidad, usando fallback local:", error);
+  const res = await fetch(`${GATEWAY_URL}${BASE_PATH}/eventos/${encodeURIComponent(eventoId)}/disponibilidad`, {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+    cache: "no-store",
+    signal: AbortSignal.timeout(4000),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Error HTTP ${res.status} al consultar disponibilidad en Entradas`);
   }
-
-  const ev = eventosLocal.find((e) => e.id === eventoId) || eventosLocal[0];
-
-  return {
-    idEvento: ev.id,
-    stockDisponible: ev.stockDisponible,
-    stockTotal: ev.stockTotal,
-    tipoEntrada: ev.tipoEntrada,
-    precio: ev.precio,
-  };
+  return await res.json();
 }
 
 /**
@@ -103,36 +160,27 @@ export async function evaluarPromocion(params: {
 }): Promise<PromocionAplicada | null> {
   if (!params.codigoPromocion) return null;
 
-  try {
-    const res = await fetch(`${GATEWAY_URL}/api/promociones/evaluar`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        id_evento: params.idEvento,
-        id_usuario: params.idUsuario,
-        cantidad_entradas: params.cantidadEntradas,
-        codigo_promocion: params.codigoPromocion,
-      }),
-      signal: AbortSignal.timeout(1500),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      if (data.porcentaje_descuento > 0) {
-        return {
-          codigo: params.codigoPromocion.toUpperCase(),
-          idPromocion: data.id_promocion || "promo-api",
-          porcentajeDescuento: data.porcentaje_descuento,
-          descripcion: data.descripcion || `Descuento del ${data.porcentaje_descuento}% aplicado`,
-        };
-      }
-    }
-  } catch (error) {
-    console.warn("Microservicio de Promociones no disponible, evaluando en catálogo local:", error);
-  }
+  const res = await fetch(`${GATEWAY_URL}/api/promociones/evaluar`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      id_evento: params.idEvento,
+      id_usuario: params.idUsuario,
+      cantidad_entradas: params.cantidadEntradas,
+      codigo_promocion: params.codigoPromocion,
+    }),
+    signal: AbortSignal.timeout(3000),
+  });
 
-  const codigoUpper = params.codigoPromocion.trim().toUpperCase();
-  if (MOCK_PROMOCIONES[codigoUpper]) {
-    return MOCK_PROMOCIONES[codigoUpper];
+  if (!res.ok) return null;
+  const data = await res.json();
+  if (data.porcentaje_descuento > 0) {
+    return {
+      codigo: params.codigoPromocion.toUpperCase(),
+      idPromocion: data.id_promocion || "promo-api",
+      porcentajeDescuento: data.porcentaje_descuento,
+      descripcion: data.descripcion || `Descuento del ${data.porcentaje_descuento}% aplicado`,
+    };
   }
 
   return null;
@@ -144,62 +192,46 @@ export async function evaluarPromocion(params: {
 export async function crearReservaTemporal(params: {
   idEvento: string;
   idUsuario: string;
+  nombreUsuario: string;
+  correoUsuario: string;
   cantidadEntradas: number;
   subtotal: number;
   descuento: number;
   total: number;
 }): Promise<ReservaTemporal> {
-  try {
-    const res = await fetch(`${GATEWAY_URL}${BASE_PATH}/reservas/hold`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        id_evento: params.idEvento,
-        id_usuario: params.idUsuario || "usr-12345",
-        nombre_usuario: "Sebastian Fuentes",
-        correo_usuario: "sebastian.fuentes@ticketu.cl",
-        cantidad: params.cantidadEntradas,
-        tiempo_limite_minutos: 10,
-      }),
-      signal: AbortSignal.timeout(3000),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      return {
-        idReserva: data.hold_id || data.id_reserva,
-        idEvento: data.id_evento || params.idEvento,
-        idUsuario: data.id_usuario || params.idUsuario,
-        cantidadEntradas: data.cantidad_entrada || params.cantidadEntradas,
-        subtotal: params.subtotal,
-        descuento: params.descuento,
-        total: data.monto_total ?? params.total,
-        estado: data.estado_reserva || "RESERVADO",
-        expiraEnMinutos: 10,
-        segundosRestantes: data.tiempo_restante_segundos ?? 600,
-        fechaCreacion: data.fecha_creacion || new Date().toISOString(),
-      };
-    }
-  } catch (error) {
-    console.warn("Backend no disponible para reserva, simulando hold temporal:", error);
+  const res = await fetch(`${GATEWAY_URL}${BASE_PATH}/reservas/hold`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      id_evento: params.idEvento,
+      id_usuario: params.idUsuario,
+      nombre_usuario: params.nombreUsuario,
+      correo_usuario: params.correoUsuario,
+      cantidad: params.cantidadEntradas,
+      tiempo_limite_minutos: 10,
+    }),
+    signal: AbortSignal.timeout(4000),
+  });
+
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({}));
+    throw new Error(errBody?.detail || errBody?.message || `Error HTTP ${res.status} al crear reserva`);
   }
 
-  const ev = eventosLocal.find((e) => e.id === params.idEvento) || eventosLocal[0];
-  ev.stockDisponible = Math.max(0, ev.stockDisponible - params.cantidadEntradas);
-
-  const holdId = `hold-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-
+  const data = await res.json();
   return {
-    idReserva: holdId,
-    idEvento: ev.id,
-    idUsuario: params.idUsuario || "usr-12345",
-    cantidadEntradas: params.cantidadEntradas,
+    idReserva: data.hold_id || data.id_reserva,
+    idEvento: data.id_evento || params.idEvento,
+    idUsuario: data.id_usuario || params.idUsuario,
+    cantidadEntradas: data.cantidad_entrada || params.cantidadEntradas,
     subtotal: params.subtotal,
     descuento: params.descuento,
-    total: params.total,
-    estado: "PENDIENTE",
+    total: data.monto_total ?? params.total,
+    estado: data.estado_reserva || "RESERVADO",
     expiraEnMinutos: 10,
-    segundosRestantes: 600,
-    fechaCreacion: new Date().toISOString(),
+    segundosRestantes: data.tiempo_restante_segundos ?? 600,
+    fechaCreacion: data.fecha_creacion || new Date().toISOString(),
   };
 }
 
@@ -207,55 +239,39 @@ export async function crearReservaTemporal(params: {
  * HU-03: Liberar cupos en MongoDB si la reserva expira o el usuario cancela la orden.
  */
 export async function liberarReservaTemporal(
-  idEvento: string,
-  cantidadEntradas: number,
+  _idEvento: string,
+  _cantidadEntradas: number,
   idReserva?: string
 ): Promise<void> {
-  try {
-    if (idReserva) {
-      await fetch(`${GATEWAY_URL}${BASE_PATH}/reservas/${idReserva}/cancelar`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ motivo: "Reserva liberada desde el Frontend" }),
-        signal: AbortSignal.timeout(3000),
-      });
-    }
-  } catch {
-    // Modo local / fallback
-  }
-
-  const ev = eventosLocal.find((e) => e.id === idEvento);
-  if (ev) {
-    ev.stockDisponible = Math.min(ev.stockTotal, ev.stockDisponible + cantidadEntradas);
-  }
+  if (!idReserva) return;
+  await fetch(`${GATEWAY_URL}${BASE_PATH}/reservas/${encodeURIComponent(idReserva)}/cancelar`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ motivo: "Reserva liberada desde el Frontend" }),
+    signal: AbortSignal.timeout(4000),
+  });
 }
 
 /**
- * Consolida una reserva existente en MongoDB (POST /api/entradas/reservas/{idReserva}/webhook-pago),
- * emite la entrada real en MongoDB y la registra automáticamente en el MySQL de Check-in.
+ * Consolida una reserva existente en MongoDB (POST /api/entradas/reservas/{idReserva}/webhook-pago)
  */
 export async function consolidarReservaYEmitirTicket(idReserva: string): Promise<string | null> {
-  try {
-    const res = await fetch(`${GATEWAY_URL}${BASE_PATH}/reservas/${idReserva}/webhook-pago`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      signal: AbortSignal.timeout(4000),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      if (Array.isArray(data.entradas_emitidas) && data.entradas_emitidas.length > 0) {
-        return data.entradas_emitidas[0];
-      }
-    }
-  } catch (error) {
-    console.warn("Error consolidando reserva en backend:", error);
+  const res = await fetch(`${GATEWAY_URL}${BASE_PATH}/reservas/${encodeURIComponent(idReserva)}/webhook-pago`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    signal: AbortSignal.timeout(4000),
+  });
+
+  if (!res.ok) return null;
+  const data = await res.json();
+  if (Array.isArray(data.entradas_emitidas) && data.entradas_emitidas.length > 0) {
+    return data.entradas_emitidas[0];
   }
   return null;
 }
 
 /**
  * HU-05 y HU-08: Emisión Directa (Flujo Gratuito) o Consolidación tras Pago Aprobado (HU-09).
- * Persiste en MongoDB de Entradas y registra síncronamente en MySQL de Check-in.
  */
 export async function emitirEntradaDirecta(params: {
   idEvento: string;
@@ -266,7 +282,6 @@ export async function emitirEntradaDirecta(params: {
   precioFinal: number;
   idReserva?: string;
 }): Promise<EntradaEmitida> {
-  // Si viene con un idReserva real del backend, consolidar vía webhook-pago primero
   if (params.idReserva) {
     const idTicketBackend = await consolidarReservaYEmitirTicket(params.idReserva);
     if (idTicketBackend) {
@@ -275,101 +290,71 @@ export async function emitirEntradaDirecta(params: {
     }
   }
 
-  try {
-    const res = await fetch(`${GATEWAY_URL}${BASE_PATH}/emision-directa`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        id_evento: params.idEvento,
-        id_usuario: params.idUsuario || "usr-12345",
-        nombre_comprador: params.nombreComprador || "Sebastian Fuentes",
-        correo_comprador: params.correoComprador || "sebastian.fuentes@ticketu.cl",
-        cantidad_entradas: params.cantidadEntradas,
-        precio_final: params.precioFinal,
-        id_reserva: params.idReserva || null,
-      }),
-      signal: AbortSignal.timeout(4000),
-    });
-    if (res.ok) {
-      const emitida: EntradaEmitida = await res.json();
-      if (typeof window !== "undefined") {
-        try {
-          sessionStorage.setItem(`ticket_${emitida.idEntrada}`, JSON.stringify(emitida));
-        } catch {
-          // Ignorar
-        }
-      }
-      return emitida;
+  const res = await fetch(`${GATEWAY_URL}${BASE_PATH}/emision-directa`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      id_evento: params.idEvento,
+      id_usuario: params.idUsuario,
+      nombre_comprador: params.nombreComprador,
+      correo_comprador: params.correoComprador,
+      cantidad_entradas: params.cantidadEntradas,
+      precio_final: params.precioFinal,
+      id_reserva: params.idReserva || null,
+    }),
+    signal: AbortSignal.timeout(4000),
+  });
+
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({}));
+    throw new Error(errBody?.detail || errBody?.message || `Error HTTP ${res.status} al emitir entrada`);
+  }
+
+  const emitida: EntradaEmitida = await res.json();
+  if (typeof window !== "undefined") {
+    try {
+      sessionStorage.setItem(`ticket_${emitida.idEntrada}`, JSON.stringify(emitida));
+    } catch {
+      // Ignorar errores de storage
     }
-  } catch (error) {
-    console.warn("Backend no disponible para emisión, simulando ticket definitivo:", error);
   }
-
-  const ev = eventosLocal.find((e) => e.id === params.idEvento) || eventosLocal[0];
-  const ticketId = `tk-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-
-  if (ev.precio === 0) {
-    ev.stockDisponible = Math.max(0, ev.stockDisponible - params.cantidadEntradas);
-  }
-
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${ticketId}`;
-
-  const nuevoTicket: EntradaEmitida = {
-    idEntrada: ticketId,
-    idEvento: ev.id,
-    nombreEvento: ev.titulo,
-    nombreComprador: params.nombreComprador || "Sebastian Fuentes",
-    correoComprador: params.correoComprador || "sebastian.fuentes@ticketu.cl",
-    tipoAcceso: ev.tipoEntrada === "GRATUITA" ? "Entrada Gratuita" : "Entrada General",
-    precioFinal: params.precioFinal,
-    cantidadEntradas: params.cantidadEntradas,
-    qrData: qrUrl,
-    fechaEvento: ev.fecha,
-    horaEvento: ev.hora,
-    lugarEvento: ev.lugar,
-    fechaEmision: new Date().toLocaleDateString("es-CL"),
-  };
-
-  ticketsEmitidosLocal[ticketId] = nuevoTicket;
-  return nuevoTicket;
+  return emitida;
 }
 
 /**
  * Obtiene la información de un ticket emitido por su ID desde MongoDB (GET /api/entradas/{idEntrada}/detalle)
  */
 export async function obtenerEntradaEmitida(idEntrada: string): Promise<EntradaEmitida | null> {
-  try {
-    const res = await fetch(`${GATEWAY_URL}${BASE_PATH}/${idEntrada}/detalle`, {
-      method: "GET",
-      headers: { "Content-Type": "application/json" },
-      cache: "no-store",
-      signal: AbortSignal.timeout(3000),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      return {
-        idEntrada: data.id_entrada,
-        idEvento: data.id_evento,
-        nombreEvento: data.nombre_evento,
-        nombreComprador: data.nombre_usuario || "Sebastian Fuentes",
-        correoComprador: data.correo_usuario || "sebastian.fuentes@ticketu.cl",
-        tipoAcceso: data.tipo_acceso || "Entrada General",
-        precioFinal: data.precio_final_pagado || 0,
-        cantidadEntradas: 1,
-        qrData:
-          typeof data.qr_data === "string"
-            ? data.qr_data
-            : `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${data.id_entrada}`,
-        fechaEvento: "20 de Noviembre, 2026",
-        horaEvento: "20:00 hrs",
-        lugarEvento: data.lugar_ingreso || "Puerta Principal - Acceso General",
-        fechaEmision: data.fecha_emision
-          ? new Date(data.fecha_emision).toLocaleDateString("es-CL")
-          : new Date().toLocaleDateString("es-CL"),
-      };
-    }
-  } catch {
-    // Backend no disponible, revisar sessionStorage / memoria
+  const res = await fetch(`${GATEWAY_URL}${BASE_PATH}/${encodeURIComponent(idEntrada)}/detalle`, {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+    cache: "no-store",
+    signal: AbortSignal.timeout(4000),
+  });
+
+  if (res.ok) {
+    const data = await res.json();
+    return {
+      idEntrada: data.id_entrada,
+      idEvento: data.id_evento,
+      nombreEvento: data.nombre_evento,
+      nombreComprador: data.nombre_usuario,
+      correoComprador: data.correo_usuario,
+      tipoAcceso: data.tipo_acceso || "Entrada General",
+      precioFinal: data.precio_final_pagado || 0,
+      cantidadEntradas: 1,
+      qrData:
+        typeof data.qr_data === "string"
+          ? data.qr_data
+          : data.qr_data?.url || `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${data.id_entrada}`,
+      fechaEvento: data.fecha_evento || "Por confirmar",
+      horaEvento: data.hora_evento || "Por confirmar",
+      lugarEvento: data.lugar_ingreso || "Puerta Principal - Acceso General",
+      fechaEmision: data.fecha_emision
+        ? new Date(data.fecha_emision).toLocaleDateString("es-CL")
+        : new Date().toLocaleDateString("es-CL"),
+    };
   }
 
   if (typeof window !== "undefined") {
@@ -377,28 +362,9 @@ export async function obtenerEntradaEmitida(idEntrada: string): Promise<EntradaE
       const guardado = sessionStorage.getItem(`ticket_${idEntrada}`);
       if (guardado) return JSON.parse(guardado);
     } catch {
-      // Fallback a memoria
+      // Ignorar
     }
   }
 
-  if (ticketsEmitidosLocal[idEntrada]) {
-    return ticketsEmitidosLocal[idEntrada];
-  }
-
-  const ev = eventosLocal[0];
-  return {
-    idEntrada: idEntrada || "tk-DEMO-2026",
-    idEvento: ev.id,
-    nombreEvento: ev.titulo,
-    nombreComprador: "Sebastian Fuentes",
-    correoComprador: "sebastian.fuentes@ticketu.cl",
-    tipoAcceso: "Entrada General Oficial",
-    precioFinal: ev.precio,
-    cantidadEntradas: 1,
-    qrData: `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${idEntrada || "tk-DEMO-2026"}`,
-    fechaEvento: ev.fecha,
-    horaEvento: ev.hora,
-    lugarEvento: ev.lugar,
-    fechaEmision: new Date().toLocaleDateString("es-CL"),
-  };
+  return null;
 }

@@ -15,6 +15,7 @@ import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import DisponibilidadPlaceholder from "./DisponibilidadPlaceholder";
 import ModalReservaHold from "./ModalReservaHold";
+import { getSession, type SessionProfile } from "@/modules/auth/api";
 import {
   obtenerEventos,
   obtenerEventoPorId,
@@ -52,13 +53,21 @@ export default function EntradasPlaceholder() {
   const [ultimoTicketEmitido, setUltimoTicketEmitido] = useState<EntradaEmitida | null>(null);
   const [correoNotificacion, setCorreoNotificacion] = useState("");
   const [notificacionEnviada, setNotificacionEnviada] = useState(false);
+  const [usuarioSesion, setUsuarioSesion] = useState<SessionProfile["usuario"] | null>(null);
 
   useEffect(() => {
     async function inicializar() {
       setCargando(true);
       try {
-        const lista = await obtenerEventos();
+        const [lista, sesion] = await Promise.all([
+          obtenerEventos(),
+          getSession().catch(() => null),
+        ]);
         setEventos(lista);
+        if (sesion?.valido && sesion.usuario) {
+          setUsuarioSesion(sesion.usuario);
+          setCorreoNotificacion((prev) => prev || sesion.usuario.correo_electronico || "");
+        }
 
         const seleccionado = eventoIdParam
           ? lista.find((e) => e.id === eventoIdParam) || lista[0]
@@ -138,9 +147,14 @@ export default function EntradasPlaceholder() {
       return;
     }
 
+    if (!usuarioSesion) {
+      setMensajePromo({ tipo: "error", texto: "Debes iniciar sesión en Auth para aplicar promociones." });
+      return;
+    }
+
     const resultado = await evaluarPromocion({
       idEvento: eventoActivo.id,
-      idUsuario: "usr-12345",
+      idUsuario: usuarioSesion.id_usuario,
       cantidadEntradas: cantidad,
       codigoPromocion: codigoDescuento,
     });
@@ -166,6 +180,10 @@ export default function EntradasPlaceholder() {
 
   const handleContinuarAdquisicion = async () => {
     if (!eventoActivo) return;
+    if (!usuarioSesion) {
+      setErrorValidacion("Debes iniciar sesión en /auth para adquirir o reservar entradas.");
+      return;
+    }
     if (cantidad === 0) {
       setErrorValidacion("Debes seleccionar al menos una entrada.");
       return;
@@ -174,13 +192,15 @@ export default function EntradasPlaceholder() {
     setProcesando(true);
     setErrorValidacion(null);
 
+    const correoFinal = (correoNotificacion || usuarioSesion.correo_electronico).trim();
+
     try {
       if (esEventoGratuito) {
         const emitida = await emitirEntradaDirecta({
           idEvento: eventoActivo.id,
-          idUsuario: "usr-12345",
-          nombreComprador: "Sebastian Fuentes",
-          correoComprador: "sebastian.fuentes@ticketu.cl",
+          idUsuario: usuarioSesion.id_usuario,
+          nombreComprador: usuarioSesion.nombre_completo,
+          correoComprador: correoFinal,
           cantidadEntradas: cantidad,
           precioFinal: 0,
         });
@@ -194,7 +214,9 @@ export default function EntradasPlaceholder() {
       } else {
         const reserva = await crearReservaTemporal({
           idEvento: eventoActivo.id,
-          idUsuario: "usr-12345",
+          idUsuario: usuarioSesion.id_usuario,
+          nombreUsuario: usuarioSesion.nombre_completo,
+          correoUsuario: correoFinal,
           cantidadEntradas: cantidad,
           subtotal: subtotal,
           descuento: montoDescuento,
@@ -652,8 +674,8 @@ export default function EntradasPlaceholder() {
                   idEntrada,
                   idEvento: eventoActivo.id,
                   nombreEvento: eventoActivo.titulo,
-                  nombreComprador: "Sebastian Fuentes",
-                  correoComprador: "sebastian.fuentes@ticketu.cl",
+                  nombreComprador: usuarioSesion?.nombre_completo || "",
+                  correoComprador: correoNotificacion || usuarioSesion?.correo_electronico || "",
                   tipoAcceso: "Entrada General Oficial",
                   precioFinal: reservaActiva.total,
                   cantidadEntradas: reservaActiva.cantidadEntradas,
