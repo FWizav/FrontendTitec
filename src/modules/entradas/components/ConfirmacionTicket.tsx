@@ -19,7 +19,7 @@ import { THEME } from "../styles/theme";
 
 export default function ConfirmacionTicket() {
   const searchParams = useSearchParams();
-  const idEntradaParam = searchParams.get("idEntrada") || "tk-998877";
+  const idEntradaParam = searchParams.get("idEntrada");
 
   const [ticket, setTicket] = useState<EntradaEmitida | null>(null);
   const [cargando, setCargando] = useState(true);
@@ -32,6 +32,11 @@ export default function ConfirmacionTicket() {
 
   useEffect(() => {
     async function cargar() {
+      if (!idEntradaParam) {
+        setTicket(null);
+        setCargando(false);
+        return;
+      }
       setCargando(true);
       setResultadoCheckin(null);
       try {

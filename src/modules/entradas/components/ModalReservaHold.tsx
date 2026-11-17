@@ -34,6 +34,7 @@ export default function ModalReservaHold({
   const [segundosRestantes, setSegundosRestantes] = useState<number>(600);
   const [procesando, setProcesando] = useState(false);
   const [mensajeExpirado, setMensajeExpirado] = useState<string | null>(null);
+  const [errorPago, setErrorPago] = useState<string | null>(null);
 
   useEffect(() => {
     if (reserva) {
@@ -85,17 +86,23 @@ export default function ModalReservaHold({
 
   const handleSimularPagoDemo = async () => {
     setProcesando(true);
+    setErrorPago(null);
     try {
       // Consolidar reserva en entradas-service (MongoDB) y registrar en checkin-service (MySQL)
       const ticketEmitidoBackend = await consolidarReservaYEmitirTicket(reserva.idReserva);
-      const ticketId = ticketEmitidoBackend || "tk-DEMO-2026";
+      if (!ticketEmitidoBackend) {
+        setErrorPago("No se pudo confirmar la reserva ni emitir la entrada en el servidor.");
+        return;
+      }
       if (onPagoCompletado) {
-        onPagoCompletado(ticketId);
+        onPagoCompletado(ticketEmitidoBackend);
       }
       if (typeof window !== "undefined") {
-        window.open(`/entradas/confirmacion?idEntrada=${ticketId}`, "_blank");
+        window.open(`/entradas/confirmacion?idEntrada=${ticketEmitidoBackend}`, "_blank");
       }
       onClose();
+    } catch (err: unknown) {
+      setErrorPago(err instanceof Error ? err.message : "Error al confirmar la reserva en el servidor.");
     } finally {
       setProcesando(false);
     }
@@ -172,6 +179,12 @@ export default function ModalReservaHold({
         )}
 
         <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+          {errorPago && (
+            <div className={`${styles.alert} ${styles.alertDanger}`} style={{ fontSize: "13px" }}>
+              {errorPago}
+            </div>
+          )}
+
           {!mensajeExpirado ? (
             <>
               <button
