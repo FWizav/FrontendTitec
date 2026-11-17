@@ -9,14 +9,37 @@
 // Por ahora este es un placeholder funcional para que puedan probar
 // su propia página mientras se define el diseño final del header.
 
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import Logo from "./logo";
 import SearchButton from "./boton_busqueda";
 import Campana from "./campana";
 
 export default function Header() {
+  const pathname = usePathname();
+
+  const navLinks = [
+    { label: "Inicio", href: "/" },
+    { label: "Catálogo", href: "/catalogo" },
+    { label: "Entradas", href: "/entradas" },
+    { label: "Organizador", href: "/organizador" },
+    { label: "Promociones", href: "/promociones" },
+    { label: "Check-in", href: "/checkin" },
+    { label: "Pagos", href: "/pagos" },
+    { label: "Mi cuenta", href: "/auth" },
+  ];
+
+  const isActive = (href: string) => {
+    if (href === "/") return pathname === "/";
+    return pathname.startsWith(href);
+  };
+
   return (
     <>
-      <style dangerouslySetInnerHTML={{ __html: `
+      <style dangerouslySetInnerHTML={{
+        __html: `
         .header-container {
           position: sticky;
           top: 0;
@@ -25,6 +48,7 @@ export default function Header() {
           z-index: 1000;
           display: flex;
           flex-direction: column;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
         }
         .header-top {
           height: 64px;
@@ -33,10 +57,26 @@ export default function Header() {
           align-items: center;
           padding: 0 24px;
         }
+        .header-brand {
+          display: flex;
+          align-items: center;
+          gap: 20px;
+        }
+        .logo-link {
+          text-decoration: none;
+          color: inherit;
+          display: flex;
+          align-items: center;
+          transition: transform 0.2s ease, opacity 0.2s ease;
+        }
+        .logo-link:hover {
+          opacity: 0.9;
+          transform: scale(1.02);
+        }
         .nav-menu {
           display: flex;
-          gap: 16px;
-          font-size: 14px;
+          gap: 8px;
+          font-size: 13px;
           font-weight: 600;
           font-family: 'Poppins', sans-serif;
           align-items: center;
@@ -45,44 +85,67 @@ export default function Header() {
           cursor: pointer;
           padding: 6px 12px;
           border-radius: 999px;
-          transition: background-color 0.2s;
+          transition: all 0.2s ease;
+          text-decoration: none;
+          color: #FFFFFF;
+          display: inline-flex;
+          align-items: center;
+          white-space: nowrap;
+          border: 1px solid transparent;
+        }
+        .nav-item:hover {
+          background-color: rgba(255, 255, 255, 0.15);
+          border-color: rgba(255, 255, 255, 0.2);
+          transform: translateY(-1px);
         }
         .nav-item.active {
-          background-color: rgba(255, 255, 255, 0.18);
+          background-color: rgba(255, 255, 255, 0.25);
+          border-color: rgba(255, 255, 255, 0.4);
+          font-weight: 700;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
         .right-controls {
           display: flex;
           align-items: center;
-          gap: 16px;
+          gap: 14px;
         }
-        .avatar-wrapper {
+        .avatar-link {
           width: 44px;
           height: 44px;
           display: flex;
           align-items: center;
           justify-content: center;
           cursor: pointer;
+          text-decoration: none;
+          border-radius: 999px;
+          transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .avatar-link:hover {
+          transform: scale(1.08);
         }
         .avatar-circle {
-          width: 32px;
-          height: 32px;
+          width: 34px;
+          height: 34px;
           background-color: #FFFFFF;
           color: #2F4374;
           border-radius: 999px;
           display: flex;
           align-items: center;
           justify-content: center;
-          font-weight: 600;
+          font-weight: 700;
           font-size: 12px;
           font-family: 'Inter', sans-serif;
+          box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
         }
-        @media (max-width: 1024px) {
+        @media (max-width: 1080px) {
           .mobile-scroll-container {
             width: 100%;
             overflow-x: auto;
             scrollbar-width: none;
             -ms-overflow-style: none;
-            padding: 0 24px 12px 24px;
+            padding: 8px 16px;
+            background-color: #25365e;
+            border-top: 1px solid rgba(255, 255, 255, 0.12);
           }
           .mobile-scroll-container::-webkit-scrollbar {
             display: none;
@@ -91,7 +154,7 @@ export default function Header() {
             display: none;
           }
         }
-        @media (min-width: 1025px) {
+        @media (min-width: 1081px) {
           .mobile-scroll-container {
             display: none;
           }
@@ -99,31 +162,41 @@ export default function Header() {
       `}} />
       <header className="header-container">
         <div className="header-top">
-          <div style={{ display: "flex", alignItems: "center", gap: "24px" }}>
-            <Logo />
-            <nav className="nav-menu desktop-nav">
-              <span className="nav-item active">Inicio</span>
-              <span className="nav-item">Mis eventos</span>
-              <span className="nav-item">Promociones</span>
-              <span className="nav-item">Configuración</span>
-              <span className="nav-item">Mi cuenta</span>
+          <div className="header-brand">
+            <Link href="/" className="logo-link" title="TicketU - Inicio">
+              <Logo />
+            </Link>
+            <nav className="nav-menu desktop-nav" aria-label="Navegación principal">
+              {navLinks.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`nav-item ${isActive(item.href) ? "active" : ""}`}
+                >
+                  {item.label}
+                </Link>
+              ))}
             </nav>
           </div>
           <div className="right-controls">
             <SearchButton />
             <Campana />
-            <div className="avatar-wrapper">
-              <div className="avatar-circle">MC</div> 
-            </div>
+            <Link href="/auth" className="avatar-link" title="Mi Cuenta / Autenticación">
+              <div className="avatar-circle">MC</div>
+            </Link>
           </div>
         </div>
         <div className="mobile-scroll-container">
-          <nav className="nav-menu">
-            <span className="nav-item active">Inicio</span>
-            <span className="nav-item">Mis eventos</span>
-            <span className="nav-item">Promociones</span>
-            <span className="nav-item">Configuración</span>
-            <span className="nav-item">Mi cuenta</span>
+          <nav className="nav-menu" aria-label="Navegación móvil">
+            {navLinks.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`nav-item ${isActive(item.href) ? "active" : ""}`}
+              >
+                {item.label}
+              </Link>
+            ))}
           </nav>
         </div>
       </header>
