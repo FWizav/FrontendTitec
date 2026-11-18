@@ -1,0 +1,42 @@
+.formularioEvento {
+  background: var(--color-surface, #ffffff);
+  border: var(--border-standard, 1px solid #d8dff0);
+  border-radius: var(--radius-card, 12px);
+  padding: var(--space-4, 24px);
+  margin-top: var(--space-4, 24px);
+}
+
+.campoFila {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-3, 16px);
+}
+
+.acciones {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2, 8px);
+  margin-top: var(--space-3, 16px);
+}
+
+.errorGeneral {
+  background: var(--color-danger-bg, #fdf0f2);
+  color: var(--color-danger-text, #b3261e);
+  padding: var(--space-3, 16px);
+  border-radius: var(--radius-control, 8px);
+  font-size: var(--fs-caption, 12px);
+  margin-top: var(--space-2, 8px);
+}
+
+.aviso409 {
+  background: var(--color-danger-bg, #fdf0f2);
+  color: var(--color-danger-text, #b3261e);
+  padding: var(--space-3, 16px);
+  border-radius: var(--radius-control, 8px);
+  margin-bottom: var(--space-3, 16px);
+  font-size: var(--fs-body, 14px);
+  font-weight: var(--fw-semibold, 600);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+}

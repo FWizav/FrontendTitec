@@ -1,0 +1,36 @@
+.nuevoEventoPage {
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.encabezado {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3, 16px);
+  margin-bottom: var(--space-2, 8px);
+}
+
+.encabezado h1 {
+  margin: 0;
+  font-family: var(--font-display, inherit);
+  font-size: var(--fs-h1, 28px);
+  color: var(--color-text-primary, #2f4374);
+}
+
+.etiquetaBorrador {
+  font-size: 10.5px;
+  font-weight: var(--fw-semibold, 600);
+  color: var(--color-text-secondary, #6b7a9a);
+  border: var(--border-standard, 1px solid #d8dff0);
+  padding: 3px 9px;
+  border-radius: var(--radius-control, 8px);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.descripcion {
+  color: var(--color-text-secondary, #6b7a9a);
+  font-size: var(--fs-body, 14px);
+  line-height: 1.5;
+  margin-top: var(--space-2, 8px);
+}

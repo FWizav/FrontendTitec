@@ -1,0 +1,34 @@
+.badgeEstado {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px var(--space-3, 16px);
+  border-radius: var(--radius-pill, 999px);
+  font-size: var(--fs-caption, 12px);
+  font-weight: var(--fw-semibold, 600);
+  white-space: nowrap;
+}
+
+.borrador {
+  color: var(--estado-borrador-text, #6b7a9a);
+  background: var(--estado-borrador-bg, #f0f0f5);
+}
+
+.publicado {
+  color: var(--estado-publicado-text, #1a6640);
+  background: var(--estado-publicado-bg, #e2f4ea);
+}
+
+.finalizado {
+  color: var(--estado-finalizado-text, #2f4374);
+  background: var(--estado-finalizado-bg, #eef1f8);
+}
+
+.cancelado {
+  color: var(--estado-cancelado-text, #b3261e);
+  background: var(--estado-cancelado-bg, #fdf0f2);
+}
+
+.desconocido {
+  color: var(--color-neutral-text, #6b7a9a);
+  background: var(--color-neutral-bg, #f0f0f5);
+}

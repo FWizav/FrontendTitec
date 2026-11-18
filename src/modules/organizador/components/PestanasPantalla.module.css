@@ -1,0 +1,32 @@
+.pestanasPantalla {
+  display: inline-flex;
+  gap: 4px;
+  margin-bottom: var(--space-4, 24px);
+}
+
+.pestana {
+  border: none;
+  background: transparent;
+  color: var(--color-text-primary, #2f4374);
+  font-size: 12.5px;
+  font-weight: var(--fw-semibold, 600);
+  padding: 8px 14px;
+  border-radius: var(--radius-control, 8px);
+  cursor: pointer;
+  font-family: inherit;
+  transition: background-color 0.15s ease;
+}
+
+.activa {
+  background: var(--color-accent, #2f4374);
+  color: var(--color-text-on-accent, #ffffff);
+}
+
+.pestana:not(.activa):hover:not(:disabled) {
+  background: var(--color-bg-panel, #f8f9fa);
+}
+
+.pestana:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
