@@ -285,10 +285,25 @@ export default function EntradasPlaceholder() {
             >
               {eventos.map((ev) => (
                 <option key={ev.id} value={ev.id}>
-                  [{ev.id}] {ev.titulo} ({ev.tipoEntrada})
+                  [{ev.origen === "CATALOGO" ? "Mockup Catálogo" : "Panel"}] {ev.titulo} ({ev.tipoEntrada})
                 </option>
               ))}
             </select>
+            {eventoActivo && (
+              <span
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: "999px",
+                  fontSize: "12px",
+                  fontWeight: 700,
+                  backgroundColor: eventoActivo.origen === "CATALOGO" ? "#FEF3C7" : "#DEF7EC",
+                  color: eventoActivo.origen === "CATALOGO" ? "#92400E" : "#03543F",
+                  border: eventoActivo.origen === "CATALOGO" ? "1px solid #F59E0B" : "1px solid #84E1BC",
+                }}
+              >
+                {eventoActivo.origen === "CATALOGO" ? "Mockup · Catálogo" : "Panel Organizador"}
+              </span>
+            )}
             <Link
               href={eventoActivo ? `/catalogo/${eventoActivo.id}` : "/catalogo"}
               className={styles.buttonSecondary}

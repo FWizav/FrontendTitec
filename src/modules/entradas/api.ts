@@ -67,34 +67,138 @@ function mapCatalogoToEventoEntradas(ev: CatalogoEventoRaw): EventoEntradas {
     maxTickets: Number(ev.maximo_ticket ?? 6),
     limiteGratuitoUsuario: esGratuita ? 2 : undefined,
     estadoGestion: mapEstadoCatalogo(ev.estado_evento),
+    origen: "CATALOGO",
+  };
+}
+
+function mapPanelToEventoEntradas(ev: {
+  id_evento: string;
+  nombre_evento: string;
+  descripcion?: string;
+  direccion_evento?: string;
+  fecha_evento?: string;
+  hora_evento?: string;
+  precio?: number | null;
+  tipo_entrada?: string;
+  estado_gestion?: string;
+  cantidad_entradas?: number;
+}): EventoEntradas {
+  const esGratuita = ev.tipo_entrada !== "PAGADA";
+  return {
+    id: ev.id_evento,
+    titulo: ev.nombre_evento,
+    fecha: ev.fecha_evento || "Por confirmar",
+    hora: ev.hora_evento || "Por confirmar",
+    lugar: ev.direccion_evento || "Por confirmar",
+    descripcion: ev.descripcion,
+    tipoEntrada: esGratuita ? "GRATUITA" : "PAGADA",
+    precio: esGratuita ? 0 : Number(ev.precio ?? 0),
+    stockTotal: Number(ev.cantidad_entradas ?? 100),
+    stockDisponible: Number(ev.cantidad_entradas ?? 100),
+    maxTickets: 6,
+    limiteGratuitoUsuario: esGratuita ? 2 : undefined,
+    estadoGestion: (ev.estado_gestion as EstadoGestionEvento) || "PUBLICADO",
+    origen: "PANEL",
   };
 }
 
 /**
- * Obtiene la lista de eventos desde el microservicio de Catálogo vía API Gateway.
+ * Obtiene eventos reales desde Entradas/Panel y también los eventos de Catálogo (marcados como mockup).
  */
 export async function obtenerEventos(): Promise<EventoEntradas[]> {
-  const res = await fetch(`${GATEWAY_URL}${CATALOGO_PATH}?limite=100`, {
-    method: "GET",
-    headers: { "Content-Type": "application/json" },
-    cache: "no-store",
-    signal: AbortSignal.timeout(5000),
-  });
+  const [resEntradas, resPanel, resCatalogo] = await Promise.allSettled([
+    fetch(`${GATEWAY_URL}${BASE_PATH}/eventos`, {
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+      signal: AbortSignal.timeout(5000),
+    }),
+    fetch(`${GATEWAY_URL}/api/organizador/v1/organizador/eventos/proximos?limite=50`, {
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+      signal: AbortSignal.timeout(5000),
+    }),
+    fetch(`${GATEWAY_URL}${CATALOGO_PATH}?limite=100`, {
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+      signal: AbortSignal.timeout(5000),
+    }),
+  ]);
 
-  if (!res.ok) {
-    const errBody = await res.json().catch(() => ({}));
-    throw new Error(errBody?.message || `Error HTTP ${res.status} al cargar eventos desde Catálogo`);
+  const panelIds = new Set<string>();
+  const mapaEventos = new Map<string, EventoEntradas>();
+
+  if (resPanel.status === "fulfilled" && resPanel.value.ok) {
+    const panelJson = await resPanel.value.json();
+    if (Array.isArray(panelJson)) {
+      for (const p of panelJson) {
+        if (p?.id_evento) {
+          panelIds.add(p.id_evento);
+          mapaEventos.set(p.id_evento, mapPanelToEventoEntradas(p));
+        }
+      }
+    }
   }
 
-  const json = await res.json();
-  const lista: CatalogoEventoRaw[] = Array.isArray(json) ? json : json?.data || [];
-  return lista.map(mapCatalogoToEventoEntradas);
+  const catalogoIds = new Set<string>();
+  if (resCatalogo.status === "fulfilled" && resCatalogo.value.ok) {
+    const catJson = await resCatalogo.value.json();
+    const listaCat: CatalogoEventoRaw[] = Array.isArray(catJson) ? catJson : catJson?.data || [];
+    for (const c of listaCat) {
+      catalogoIds.add(c.id_evento);
+      if (!panelIds.has(c.id_evento)) {
+        mapaEventos.set(c.id_evento, mapCatalogoToEventoEntradas(c));
+      }
+    }
+  }
+
+  if (resEntradas.status === "fulfilled" && resEntradas.value.ok) {
+    const listaEntradas: EventoEntradas[] = await resEntradas.value.json();
+    for (const ev of listaEntradas) {
+      const esDePanel = panelIds.has(ev.id) || !catalogoIds.has(ev.id);
+      mapaEventos.set(ev.id, {
+        ...ev,
+        origen: esDePanel ? "PANEL" : "CATALOGO",
+      });
+    }
+  }
+
+  const resultado = Array.from(mapaEventos.values());
+  if (resultado.length === 0) {
+    throw new Error("No se pudieron cargar eventos ni desde Panel/Entradas ni desde Catálogo.");
+  }
+
+  // Mostrar primero los reales de Panel y luego los de Catálogo
+  return resultado.sort((a, b) => {
+    if (a.origen === b.origen) return 0;
+    return a.origen === "PANEL" ? -1 : 1;
+  });
 }
 
 /**
- * Obtiene un evento específico desde Catálogo y sincroniza su stock real con Entradas si está disponible.
+ * Obtiene un evento específico desde Entradas o Catálogo y sincroniza su stock real.
  */
 export async function obtenerEventoPorId(eventoId: string): Promise<EventoEntradas | null> {
+  try {
+    const resEnt = await fetch(`${GATEWAY_URL}${BASE_PATH}/eventos/${encodeURIComponent(eventoId)}`, {
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+      signal: AbortSignal.timeout(4000),
+    });
+    if (resEnt.ok) {
+      const ev: EventoEntradas = await resEnt.json();
+      return {
+        ...ev,
+        origen: eventoId.startsWith("evt-") ? "CATALOGO" : "PANEL",
+      };
+    }
+  } catch {
+    // Continuar con Catálogo si no está en Entradas
+  }
+
   const res = await fetch(`${GATEWAY_URL}${CATALOGO_PATH}/${encodeURIComponent(eventoId)}`, {
     method: "GET",
     headers: { "Content-Type": "application/json" },
@@ -105,14 +209,13 @@ export async function obtenerEventoPorId(eventoId: string): Promise<EventoEntrad
   if (res.status === 404) return null;
   if (!res.ok) {
     const errBody = await res.json().catch(() => ({}));
-    throw new Error(errBody?.message || `Error HTTP ${res.status} al consultar el evento en Catálogo`);
+    throw new Error(errBody?.message || `Error HTTP ${res.status} al consultar el evento`);
   }
 
   const json = await res.json();
   const raw: CatalogoEventoRaw = json?.data ?? json;
   const evento = mapCatalogoToEventoEntradas(raw);
 
-  // Sincronizar stock en vivo desde Entradas si el evento existe en MongoDB de Entradas
   try {
     const disp = await obtenerDisponibilidad(eventoId);
     evento.stockDisponible = disp.stockDisponible;

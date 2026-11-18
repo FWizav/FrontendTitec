@@ -30,6 +30,7 @@ export interface EventoEntradas {
   maxTickets: number;                 // Máximo de tickets por transacción (HU-02 y tabla dependencias)
   limiteGratuitoUsuario?: number;    // HU-08: Límite por usuario para entradas gratuitas
   estadoGestion: EstadoGestionEvento;
+  origen?: "PANEL" | "CATALOGO";
 }
 
 /**
