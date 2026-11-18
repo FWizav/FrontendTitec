@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
+import { BrowserQRCodeReader, type IScannerControls } from "@zxing/browser";
 import { ArrowLeft, Camera, RefreshCw, AlertCircle } from "./icons";
 import { ScanResultInfo } from "../types";
 import { procesarLecturaQR } from "../api";
@@ -13,21 +14,19 @@ interface ScannerProps {
 export default function ScannerView({ onBack, onScan }: ScannerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const scanIntervalRef = useRef<number | null>(null);
+  const scannerControlsRef = useRef<IScannerControls | null>(null);
+  const decodedRef = useRef(false);
 
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
-  const [scannerSupported, setScannerSupported] = useState(true);
   const [attempt, setAttempt] = useState(0);
 
   // Detener la cámara y el intervalo
   const stopCamera = useCallback(() => {
-    if (scanIntervalRef.current) {
-      window.clearInterval(scanIntervalRef.current);
-      scanIntervalRef.current = null;
-    }
+    scannerControlsRef.current?.stop();
+    scannerControlsRef.current = null;
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
@@ -41,6 +40,8 @@ export default function ScannerView({ onBack, onScan }: ScannerProps) {
   // Procesar código leído
   const handleDecodedQR = useCallback(
     async (qrContent: string) => {
+      if (decodedRef.current) return;
+      decodedRef.current = true;
       // Detener cámara al leer exitosamente
       stopCamera();
       setIsValidating(true);
@@ -69,6 +70,7 @@ export default function ScannerView({ onBack, onScan }: ScannerProps) {
     let cancelled = false;
 
     async function initCamera() {
+      decodedRef.current = false;
       setCameraError(null);
       setHasCameraPermission(null);
 
@@ -101,40 +103,30 @@ export default function ScannerView({ onBack, onScan }: ScannerProps) {
         }
 
         streamRef.current = stream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          await videoRef.current.play().catch(() => {});
-        }
+        const video = videoRef.current;
+        if (!video) throw new Error("No se pudo iniciar el visor de la cámara.");
 
+        // ZXing decodifica los frames sin depender de BarcodeDetector nativo.
+        const reader = new BrowserQRCodeReader(undefined, {
+          delayBetweenScanAttempts: 250,
+          delayBetweenScanSuccess: 500,
+        });
+        const controls = await reader.decodeFromStream(stream, video, (result, _error, controls) => {
+          if (cancelled || decodedRef.current || !result) return;
+          controls.stop();
+          void handleDecodedQR(result.getText());
+        });
+        if (cancelled || decodedRef.current) {
+          controls.stop();
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+        scannerControlsRef.current = controls;
         setHasCameraPermission(true);
         setIsScanning(true);
-
-        // Iniciar detector de código de barras / QR si existe BarcodeDetector nativo
-        if (typeof window !== "undefined" && "BarcodeDetector" in window) {
-          try {
-            // @ts-expect-error - BarcodeDetector es un API web moderno
-            const barcodeDetector = new window.BarcodeDetector({ formats: ["qr_code"] });
-
-            scanIntervalRef.current = window.setInterval(async () => {
-              if (!videoRef.current || videoRef.current.readyState < 2) return;
-              try {
-                const barcodes = await barcodeDetector.detect(videoRef.current);
-                if (barcodes.length > 0 && barcodes[0].rawValue) {
-                  handleDecodedQR(barcodes[0].rawValue);
-                }
-              } catch {
-                // Error de lectura en frame actual, continúa escaneando
-              }
-            }, 250);
-          } catch (e) {
-            console.warn("BarcodeDetector no soportado, usando modo fallback:", e);
-            setScannerSupported(false);
-          }
-        } else {
-          setScannerSupported(false);
-        }
       } catch (err: unknown) {
         if (cancelled) return;
+        stopCamera();
         setHasCameraPermission(false);
         const errorText = err instanceof Error ? err.message : String(err);
         if (/NotAllowedError|permission|denied/i.test(errorText)) {
@@ -142,7 +134,7 @@ export default function ScannerView({ onBack, onScan }: ScannerProps) {
         } else if (/NotFoundError|device|not found/i.test(errorText)) {
           setCameraError("No se encontró ninguna cámara disponible en este dispositivo.");
         } else {
-          setCameraError("No se pudo iniciar la cámara: " + errorText);
+          setCameraError("No se pudo iniciar la cámara o el lector QR: " + errorText);
         }
       }
     }
