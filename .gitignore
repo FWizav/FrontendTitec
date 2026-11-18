@@ -34,3 +34,6 @@ Thumbs.db
 
 # TypeScript
 *.tsbuildinfo
+
+# Evitar copias completas del frontend dentro del repositorio
+/frontend/
