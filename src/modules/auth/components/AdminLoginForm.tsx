@@ -124,7 +124,7 @@ export default function AdminLoginForm() {
           </div>
 
           <p className={styles.linkRow}>
-            <Link className={styles.link} href="/recuperar">
+            <Link className={styles.link} href="/auth/recuperar">
               ¿Olvidaste tu contraseña?
             </Link>
           </p>

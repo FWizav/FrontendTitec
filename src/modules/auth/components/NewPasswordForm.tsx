@@ -127,7 +127,7 @@ export default function NewPasswordForm({
           <p className={styles.helper}>Validando enlace...</p>
         ) : done || !token ? (
           <p className={styles.switchText}>
-            <Link className={styles.link} href={done ? loginHref : "/recuperar"}>
+            <Link className={styles.link} href={done ? loginHref : "/auth/recuperar"}>
               {done ? "Ir a iniciar sesión" : "Solicitar un nuevo enlace"}
             </Link>
           </p>
