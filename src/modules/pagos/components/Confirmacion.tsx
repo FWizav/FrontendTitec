@@ -16,6 +16,14 @@ const TEXTOS: Record<EstadoPago, { titulo: string; detalle: string }> = {
   REEMBOLSADO: { titulo: 'Pago reembolsado', detalle: 'El monto fue devuelto a tu tarjeta.' },
 };
 
+const ETIQUETA: Record<EstadoPago, string> = {
+  APROBADO: 'Aprobado',
+  PENDIENTE: 'En proceso',
+  RECHAZADO: 'Rechazado',
+  ANULADO: 'Anulado',
+  REEMBOLSADO: 'Reembolsado',
+};
+
 /** Colores de estado del estándar (filas 5 y 18): éxito, peligro e información. */
 const TONO: Record<EstadoPago, { icono: string; badge: string }> = {
   APROBADO: { icono: 'text-ticket-exito', badge: 'text-ticket-exito bg-ticket-exito-bg' },
@@ -28,21 +36,19 @@ const TONO: Record<EstadoPago, { icono: string; badge: string }> = {
 export default function Confirmacion({ pago }: { pago: Pago }) {
   const texto =
     pago.estado_pago === 'APROBADO' && pago.destinatario
-      ? { ...TEXTOS.APROBADO, detalle: `Tu compra fue procesada. ${pago.destinatario.nombre} recibirá la entrada con código QR en ${pago.destinatario.email}.` }
+      ? { ...TEXTOS.APROBADO, detalle: `Tu compra fue procesada. La entrada con código QR queda a nombre de ${pago.destinatario.nombre}.` }
       : TEXTOS[pago.estado_pago];
   const tono = TONO[pago.estado_pago];
   const Icono = pago.estado_pago === 'APROBADO' ? CheckCircle2 : pago.estado_pago === 'PENDIENTE' ? Clock : XCircle;
 
   const filas: Array<[string, string]> = [
     ['Monto', `${formatoCLP(pago.monto)} ${pago.moneda}`],
-    ['ID de pago', pago.id_pago],
-    ['Reserva', pago.id_reserva],
+    ['Código de compra', pago.id_pago.slice(0, 8).toUpperCase()],
     ['Fecha', new Date(pago.fecha_creacion).toLocaleString('es-CL')],
   ];
   if (pago.motivo_rechazo) filas.push(['Motivo', pago.motivo_rechazo]);
   if (pago.destinatario) {
     filas.push(['Entrada para', pago.destinatario.nombre]);
-    filas.push(['Se enviará a', pago.destinatario.email]);
     if (pago.destinatario.rut) filas.push(['RUT', formatoRut(pago.destinatario.rut)]);
   }
 
@@ -53,7 +59,7 @@ export default function Confirmacion({ pago }: { pago: Pago }) {
       <p className="text-sm text-ticket-secondary max-w-md">{texto.detalle}</p>
 
       {/* Badge de estado (pill, radio 999px) */}
-      <span className={`rounded-full px-3 py-1 text-xs font-semibold ${tono.badge}`}>{pago.estado_pago}</span>
+      <span className={`rounded-full px-3 py-1 text-xs font-semibold ${tono.badge}`}>{ETIQUETA[pago.estado_pago]}</span>
 
       <dl className="w-full max-w-md mt-2 divide-y divide-ticket-border border border-ticket-border rounded-lg text-sm text-left">
         {filas.map(([etiqueta, valor]) => (
@@ -64,13 +70,41 @@ export default function Confirmacion({ pago }: { pago: Pago }) {
         ))}
       </dl>
 
-      <button
-        type="button"
-        onClick={() => window.location.reload()}
-        className="mt-4 h-10 px-6 bg-ticket-primary text-white text-sm font-semibold rounded-lg hover:bg-ticket-hover transition-colors"
-      >
-        {pago.estado_pago === 'APROBADO' ? 'Hacer otra compra' : 'Volver a intentar'}
-      </button>
+      {/* Navegación entre módulos: después de pagar se vuelve a Entradas (ahí están las entradas con QR). */}
+      <div className="mt-4 flex flex-col sm:flex-row gap-3 justify-center">
+        {pago.estado_pago === 'APROBADO' ? (
+          <>
+            <a
+              href={'/entradas'}
+              className="h-10 px-6 bg-ticket-primary text-white text-sm font-semibold rounded-lg hover:bg-ticket-hover transition-colors flex items-center justify-center no-underline"
+            >
+              Ver mis entradas
+            </a>
+            <a
+              href={'/'}
+              className="h-10 px-6 border border-ticket-border text-ticket-primary text-sm font-semibold rounded-lg hover:bg-ticket-banner transition-colors flex items-center justify-center no-underline"
+            >
+              Volver al inicio
+            </a>
+          </>
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="h-10 px-6 bg-ticket-primary text-white text-sm font-semibold rounded-lg hover:bg-ticket-hover transition-colors"
+            >
+              Volver a intentar
+            </button>
+            <a
+              href={'/entradas'}
+              className="h-10 px-6 border border-ticket-border text-ticket-primary text-sm font-semibold rounded-lg hover:bg-ticket-banner transition-colors flex items-center justify-center no-underline"
+            >
+              Volver a Entradas
+            </a>
+          </>
+        )}
+      </div>
     </section>
   );
 }
