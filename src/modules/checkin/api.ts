@@ -1,14 +1,12 @@
 // ============================================================================
 // modules/checkin/api.ts
 // ----------------------------------------------------------------------------
-// Capa de API para el módulo de Check-in (Grupo 5) integrada con Entradas (Grupo 3)
-// a través del API Gateway (http://localhost:8080).
+// Capa de API conectada en TIEMPO REAL al microservicio Check-in (MySQL)
+// y al microservicio de Entradas (MongoDB), soportando API Gateway y puertos directos.
 // ============================================================================
 
 import { GATEWAY_URL } from "@/lib/env";
 import { ScanResultInfo } from "./types";
-
-const BASE_PATH = "/api/checkin";
 
 export interface ValidacionCheckinResponse {
   valido: boolean;
@@ -23,38 +21,57 @@ export interface ValidacionCheckinResponse {
 export interface ConsultaEntradaCheckinResponse {
   id_ticket: string;
   nombre_usuario: string;
-  usuario: {
+  usuario?: {
     id_usuario: string;
     rol_usuario: string;
   };
 }
 
 /**
- * Valida un ticket en puerta contra la base de datos MySQL de Check-in
+ * Valida un ticket en puerta contra la base de datos MySQL de Check-in (backend-main)
  * (POST /api/checkin/validaciones)
  */
 export async function validarTicketEnPuerta(params: {
   idEntrada: string;
   idEvento: string;
 }): Promise<ValidacionCheckinResponse> {
-  const res = await fetch(`${GATEWAY_URL}${BASE_PATH}/validaciones`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      id_entrada: params.idEntrada.trim(),
-      id_evento: params.idEvento.trim(),
-    }),
-  });
+  const idEntrada = params.idEntrada.trim();
+  const idEvento = params.idEvento.trim();
+  const body = JSON.stringify({ id_entrada: idEntrada, id_evento: idEvento });
 
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data?.error?.message || `Error HTTP ${res.status} al validar en Check-in`);
+  const cleanGateway = (GATEWAY_URL || "http://localhost:8080").replace(/\/+$/, "");
+  const urls = [
+    `${cleanGateway}/api/checkin/validaciones`,
+    "/api/checkin/validaciones",
+    "http://localhost:3005/api/checkin/validaciones",
+    "http://127.0.0.1:3005/api/checkin/validaciones",
+  ];
+
+  let lastError: unknown = null;
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData?.error?.message || `Error HTTP ${res.status}`);
+      }
+
+      return await res.json();
+    } catch (err) {
+      lastError = err;
+    }
   }
-  return data;
+
+  throw lastError instanceof Error ? lastError : new Error("No fue posible comunicarse con el servicio de Check-in.");
 }
 
 /**
- * Registra un ticket en la base de datos MySQL de Check-in
+ * Registra un ticket en la base de datos MySQL de Check-in (backend-main)
  * (POST /api/checkin/tickets)
  */
 export async function registrarTicketEnCheckin(params: {
@@ -64,23 +81,43 @@ export async function registrarTicketEnCheckin(params: {
   nombreUsuario: string;
 }): Promise<{ mensaje: string }> {
   const idLimpio = params.idEntrada.trim();
-  const res = await fetch(`${GATEWAY_URL}${BASE_PATH}/tickets`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      id_entrada: idLimpio,
-      id_evento: params.idEvento.trim(),
-      id_usuario: params.idUsuario.trim(),
-      nombre_usuario: params.nombreUsuario.trim(),
-      qr_data: idLimpio,
-    }),
+  const body = JSON.stringify({
+    id_entrada: idLimpio,
+    id_evento: params.idEvento.trim(),
+    id_usuario: params.idUsuario.trim(),
+    nombre_usuario: params.nombreUsuario.trim(),
+    qr_data: idLimpio,
   });
 
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data?.error?.message || `Error HTTP ${res.status} al registrar en Check-in`);
+  const cleanGateway = (GATEWAY_URL || "http://localhost:8080").replace(/\/+$/, "");
+  const urls = [
+    `${cleanGateway}/api/checkin/tickets`,
+    "/api/checkin/tickets",
+    "http://localhost:3005/api/checkin/tickets",
+    "http://127.0.0.1:3005/api/checkin/tickets",
+  ];
+
+  let lastError: unknown = null;
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData?.error?.message || `Error HTTP ${res.status}`);
+      }
+
+      return await res.json();
+    } catch (err) {
+      lastError = err;
+    }
   }
-  return data;
+
+  throw lastError instanceof Error ? lastError : new Error("No fue posible registrar el ticket.");
 }
 
 /**
@@ -88,23 +125,42 @@ export async function registrarTicketEnCheckin(params: {
  * (GET /api/entradas/{id_ticket})
  */
 export async function consultarTicketEnEntradas(idEntrada: string): Promise<ConsultaEntradaCheckinResponse> {
-  const res = await fetch(`${GATEWAY_URL}/api/entradas/${encodeURIComponent(idEntrada.trim())}`, {
-    method: "GET",
-    headers: { "Content-Type": "application/json" },
-    cache: "no-store",
-  });
+  const idLimpio = encodeURIComponent(idEntrada.trim());
+  const cleanGateway = (GATEWAY_URL || "http://localhost:8080").replace(/\/+$/, "");
+  const urls = [
+    `${cleanGateway}/api/entradas/${idLimpio}`,
+    `/api/entradas/${idLimpio}`,
+    `http://localhost:3003/api/entradas/${idLimpio}`,
+    `http://127.0.0.1:3003/api/entradas/${idLimpio}`,
+  ];
 
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data?.detail || `Ticket no encontrado en Entradas (HTTP ${res.status})`);
+  let lastError: unknown = null;
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData?.detail || `Error HTTP ${res.status}`);
+      }
+
+      return await res.json();
+    } catch (err) {
+      lastError = err;
+    }
   }
-  return data;
+
+  throw lastError instanceof Error ? lastError : new Error("No fue posible comunicarse con el servicio de Entradas.");
 }
 
 /**
  * Conector principal para la interfaz de Check-in:
- * Valida el ticket contra el Gateway (Check-in MySQL y respaldo MongoDB)
- * y devuelve el formato estándar para el modal de estado.
+ * Valida el ticket contra el Back-end real de Check-in (MySQL) y Entradas (MongoDB).
+ * Si el ticket no existe en el backend, falla y se rechaza el acceso en tiempo real.
  */
 export async function validarTicketCheckin(idEntrada: string, idEvento: string): Promise<ScanResultInfo> {
   const timestamp = new Date().toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
@@ -125,93 +181,68 @@ export async function validarTicketCheckin(idEntrada: string, idEvento: string):
         return {
           status: "accepted",
           rawContent: JSON.stringify({
-            checkin: data.ticket ?? { id_entrada: entradaLimpia, id_evento: eventoLimpio },
-            entradasMongo: datosEntradas,
-          }),
+            checkinMySQL: data.ticket ?? { id_entrada: entradaLimpia, id_evento: eventoLimpio },
+            entradasMongoDB: datosEntradas,
+          }, null, 2),
           ticket: {
             id_entrada: data.ticket?.id_entrada || entradaLimpia,
             id_evento: data.ticket?.id_evento || eventoLimpio,
             nombre_usuario: data.ticket?.nombre_usuario || datosEntradas?.nombre_usuario || "Asistente Verificado",
-            nombre_evento: `Evento ${data.ticket?.id_evento || eventoLimpio}`,
+            nombre_evento: (data.ticket as any)?.nombre_evento || (datosEntradas as any)?.nombre_evento || `Evento ${data.ticket?.id_evento || eventoLimpio}`,
             fecha: new Date().toLocaleDateString("es-CL"),
             hora_inicio: "09:30 hrs",
             hora_cierre: "20:00 hrs",
-            direccion: "Sede Oficial del Evento",
-            tipo_entrada: datosEntradas?.usuario.rol_usuario ? `Acceso (${datosEntradas.usuario.rol_usuario})` : "General",
+            direccion: (data.ticket as any)?.lugar_ingreso || (datosEntradas as any)?.lugar_ingreso || "Sede Oficial del Evento",
+            tipo_entrada: datosEntradas?.usuario?.rol_usuario ? `Acceso (${datosEntradas.usuario.rol_usuario})` : "General",
           },
           motivo: data.motivo || "ACCESO_AUTORIZADO",
-          mensaje: "Acceso autorizado. Entrada válida y registrada en el sistema de Check-in.",
+          mensaje: "Acceso autorizado. Entrada verificada en la base de datos de Check-in.",
           timestamp,
         };
       } else {
         const motivo = data.motivo || "ACCESO_DENEGADO";
+        const mensajeRechazo =
+          motivo === "TICKET_NOT_FOUND"
+            ? "Acceso rechazado. El ticket no existe en el sistema o no está registrado."
+            : motivo === "EVENT_MISMATCH"
+              ? "Acceso rechazado. El ticket no coincide con este evento."
+              : `Acceso denegado (${motivo}). Entrada no autorizada.`;
+
         return {
           status: "rejected",
-          rawContent: JSON.stringify(data),
+          rawContent: JSON.stringify(data, null, 2),
           ticket: { id_entrada: entradaLimpia, id_evento: eventoLimpio },
           motivo,
-          mensaje: `Acceso denegado (${motivo}). La entrada no coincide con el evento o no está habilitada.`,
+          mensaje: mensajeRechazo,
           timestamp,
         };
       }
+    } else {
+      // Fallo de red con el backend
+      const errorDetalle =
+        validacionCheckin.reason instanceof Error
+          ? validacionCheckin.reason.message
+          : String(validacionCheckin.reason);
+
+      return {
+        status: "invalid",
+        rawContent: errorDetalle,
+        ticket: { id_entrada: entradaLimpia, id_evento: eventoLimpio },
+        motivo: "ERROR_CONEXION_BACKEND",
+        mensaje: `No se pudo conectar con el microservicio de Check-in: ${errorDetalle}`,
+        timestamp,
+      };
     }
   } catch (error) {
-    console.warn("API Gateway no disponible, aplicando resolución local de demostración:", error);
-  }
-
-  // Fallback offline / desarrollo si el API Gateway no está activo
-  return resolverTicketLocal(entradaLimpia, eventoLimpio, timestamp);
-}
-
-/**
- * Resuelve tickets de prueba localmente cuando el Gateway está offline
- */
-function resolverTicketLocal(idEntrada: string, idEvento: string, timestamp: string): ScanResultInfo {
-  const entradaLower = idEntrada.toLowerCase();
-  const esRechazada =
-    entradaLower.includes("inval") ||
-    entradaLower.includes("rechaz") ||
-    entradaLower.includes("fake") ||
-    idEntrada === "0000";
-
-  if (esRechazada) {
     return {
-      status: "rejected",
-      rawContent: `id_entrada: "${idEntrada}", id_evento: "${idEvento}"`,
-      ticket: {
-        id_entrada: idEntrada,
-        id_evento: idEvento,
-        nombre_evento: `Evento ${idEvento}`,
-        nombre_usuario: "No registrado",
-      },
-      motivo: "TICKET_NOT_FOUND",
-      mensaje: "Entrada no encontrada o anulada en el registro.",
+      status: "invalid",
+      rawContent: String(error),
+      ticket: { id_entrada: entradaLimpia, id_evento: eventoLimpio },
+      motivo: "ERROR_DESCONOCIDO",
+      mensaje: "Ocurrió un error inesperado al procesar la validación con el servidor.",
       timestamp,
     };
   }
-
-  // Semilla oficial de prueba del Grupo 5
-  const esSemillaOficial = idEntrada === "tk-998877" || idEntrada === "tk-demo-001" || idEntrada === "tk-DEMO-2026";
-  const nombreAsistente = esSemillaOficial ? "Asistente Semilla Grupo 5" : "Asistente Acreditado";
-
-  return {
-    status: "accepted",
-    rawContent: `id_entrada: "${idEntrada}", id_evento: "${idEvento}"`,
-    ticket: {
-      id_entrada: idEntrada,
-      id_evento: idEvento,
-      nombre_usuario: nombreAsistente,
-      nombre_evento: `Evento ${idEvento}`,
-      direccion: "Auditorio Central, Campus Tecnológico",
-      hora_inicio: "09:30 hrs",
-      hora_cierre: "18:00 hrs",
-      fecha: new Date().toLocaleDateString("es-CL"),
-      tipo_entrada: "General",
-    },
-    motivo: "TICKET_FOUND",
-    mensaje: "Entrada verificada con éxito (modo local / semilla).",
-    timestamp,
-  };
 }
 
 /**
@@ -233,7 +264,7 @@ export async function procesarLecturaQR(raw: string): Promise<ScanResultInfo> {
 
   const rawClean = raw.trim();
   let idEntrada = "";
-  let idEvento = "evt-77889"; // Semilla de evento por defecto del Grupo 5
+  let idEvento = "evt-77889";
 
   // 1. Caso JSON: { "id_entrada": "...", "id_evento": "..." }
   try {
@@ -243,13 +274,17 @@ export async function procesarLecturaQR(raw: string): Promise<ScanResultInfo> {
       idEvento = String(data.id_evento || data.eventoId || data.evento_id || idEvento);
     }
   } catch {
-    // No es JSON, continuar con otros formatos
+    // Continuar
   }
 
-  // 2. Caso URL: ...?idEntrada=...&idEvento=... o ...?ticket=...
+  // 2. Caso URL
   if (!idEntrada && (rawClean.startsWith("http://") || rawClean.startsWith("https://"))) {
     try {
       const url = new URL(rawClean);
+      const dataParam = url.searchParams.get("data");
+      if (dataParam) {
+        return await procesarLecturaQR(dataParam);
+      }
       idEntrada =
         url.searchParams.get("idEntrada") ||
         url.searchParams.get("ticket") ||
@@ -264,21 +299,30 @@ export async function procesarLecturaQR(raw: string): Promise<ScanResultInfo> {
 
   // 3. Caso formato Entradas Grupo 3: TICKETU-{ticketId}-{eventoId}
   if (!idEntrada && rawClean.startsWith("TICKETU-")) {
-    const partes = rawClean.split("-");
-    if (partes.length >= 3) {
-      idEntrada = partes[1];
-      idEvento = partes.slice(2).join("-");
-    } else if (partes.length === 2) {
-      idEntrada = partes[1];
+    const sinPrefijo = rawClean.substring(8); // Quita "TICKETU-"
+    const evtMatch = sinPrefijo.match(/-(evt-?[\w-]+)$/i);
+    if (evtMatch && evtMatch.index !== undefined) {
+      idEntrada = sinPrefijo.substring(0, evtMatch.index).trim();
+      idEvento = evtMatch[1].trim();
+    } else {
+      const partes = sinPrefijo.split("-");
+      if (partes.length >= 2) {
+        // Si no tiene patrón evt-, toma la última parte como evento y el resto como entrada
+        const ultimoGuion = sinPrefijo.lastIndexOf("-");
+        idEntrada = sinPrefijo.substring(0, ultimoGuion).trim();
+        idEvento = sinPrefijo.substring(ultimoGuion + 1).trim();
+      } else {
+        idEntrada = sinPrefijo.trim();
+      }
     }
   }
 
-  // 4. Caso separador por dos puntos o barra: "tk-998877:evt-77889" o "tk-998877|evt-77889"
+  // 4. Caso separador por dos puntos o barra: "tk-101:evt-77889" o "tk-101|evt-77889"
   if (!idEntrada && (rawClean.includes(":") || rawClean.includes("|"))) {
     const sep = rawClean.includes(":") ? ":" : "|";
-    const [entradaPart, eventoPart] = rawClean.split(sep);
+    const [entradaPart, ...eventoParts] = rawClean.split(sep);
     if (entradaPart) idEntrada = entradaPart.trim();
-    if (eventoPart) idEvento = eventoPart.trim();
+    if (eventoParts.length > 0) idEvento = eventoParts.join(sep).trim();
   }
 
   // 5. Caso texto plano: el contenido completo es el ID de entrada
@@ -286,6 +330,6 @@ export async function procesarLecturaQR(raw: string): Promise<ScanResultInfo> {
     idEntrada = rawClean;
   }
 
-  // Ejecuta la validación real contra el microservicio / Gateway
+  // Ejecuta la validación real contra el microservicio
   return await validarTicketCheckin(idEntrada, idEvento);
 }
