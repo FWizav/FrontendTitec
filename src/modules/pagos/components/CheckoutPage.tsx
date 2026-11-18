@@ -8,7 +8,15 @@ import BannerPasos from '@/modules/pagos/components/BannerPasos';
 import CheckoutForm, { type EstadoPerfil, type PagoExistente } from '@/modules/pagos/components/CheckoutForm';
 import OrderSummary from '@/modules/pagos/components/OrderSummary';
 import Confirmacion from '@/modules/pagos/components/Confirmacion';
-import { ErrorApi, obtenerDatosCheckout, obtenerPerfil, type Destinatario, type Pago } from '@/modules/pagos/api';
+import {
+  crearTransaccion,
+  ErrorApi,
+  obtenerDatosCheckout,
+  obtenerPago,
+  obtenerPerfil,
+  type Destinatario,
+  type Pago,
+} from '@/modules/pagos/api';
 import { PEDIDO_DEMO } from '@/modules/pagos/lib/pedido';
 import { stripePromise } from '@/modules/pagos/lib/stripe';
 import '@/modules/pagos/pagos.css';
@@ -16,12 +24,32 @@ import '@/modules/pagos/pagos.css';
 type Carga =
   | { estado: 'cargando' }
   | { estado: 'listo'; existente: PagoExistente | null; destinatario?: Destinatario | null }
-  | { estado: 'error'; mensaje: string; urlStripe?: string | null };
+  | { estado: 'error'; mensaje: string; urlStripe?: string | null; volverAEntradas?: boolean };
+
+/** Reserva que llega desde el módulo Entradas: /pagos?idReserva=...&total=...&cantidad=...&idEvento=... */
+interface ReservaEntradas {
+  id_reserva: string;
+  total: number;
+  cantidad_entradas: number;
+  id_evento?: string;
+}
+
+function leerReserva(params: URLSearchParams): ReservaEntradas | 'invalida' | null {
+  const id = params.get('idReserva') ?? params.get('id_reserva');
+  if (!id) return null;
+  const total = Number(params.get('total'));
+  const cantidad = Number(params.get('cantidad') ?? params.get('cantidad_entradas'));
+  if (!Number.isInteger(total) || total <= 0 || !Number.isInteger(cantidad) || cantidad <= 0) return 'invalida';
+  const idEvento = params.get('idEvento') ?? params.get('id_evento');
+  return { id_reserva: id, total, cantidad_entradas: cantidad, ...(idEvento ? { id_evento: idEvento } : {}) };
+}
 
 /**
  * Flujo del módulo de Pagos:
  *   - Con ?id_pago=... (url_checkout que entrega el backend a Entradas): se cobra ese pago existente.
- *   - Sin id_pago: demo con el pedido de ejemplo (el front crea el pago).
+ *   - Con ?idReserva=...&total=...&cantidad=... (botón "Ir a pagar" del módulo Entradas): el front crea el pago
+ *     y el backend verifica la reserva contra Entradas (integración I1) antes de cobrar.
+ *   - Sin parámetros: demo con el pedido de ejemplo (el front crea el pago).
  *   Paso 1 (Pago) → datos del comprador (Auth, vía Pagos), "¿Para quién es la entrada?" y formulario
  *   con Stripe Elements. Paso 2 (Confirmación) → resultado del microservicio.
  *   Todas las llamadas van al API Gateway: /api/pagos/**.
@@ -29,9 +57,18 @@ type Carga =
  */
 export default function CheckoutPage() {
   const pedido = PEDIDO_DEMO;
-  const idPago = useSearchParams().get('id_pago');
+  const params = useSearchParams();
+  const idPago = params.get('id_pago');
+  const claveReserva = idPago ? null : params.toString();
   const [pago, setPago] = useState<Pago | null>(null);
-  const [carga, setCarga] = useState<Carga>(idPago ? { estado: 'cargando' } : { estado: 'listo', existente: null });
+  const [carga, setCarga] = useState<Carga>(() => {
+    if (idPago) return { estado: 'cargando' };
+    const reserva = leerReserva(params);
+    if (reserva === 'invalida') {
+      return { estado: 'error', mensaje: 'No recibimos bien los datos de tu reserva. Vuelve a elegir tus entradas.', volverAEntradas: true };
+    }
+    return reserva ? { estado: 'cargando' } : { estado: 'listo', existente: null };
+  });
   const [perfil, setPerfil] = useState<EstadoPerfil>({ estado: 'cargando' });
 
   // Sesión y datos del comprador: Pagos los valida con Auth (contrato Auth ↔ Pagos v1.3).
@@ -93,6 +130,53 @@ export default function CheckoutPage() {
     };
   }, [idPago]);
 
+  // Llegada desde Entradas con la reserva: se crea (o recupera, es idempotente) el pago. El backend de Pagos
+  // consulta la reserva en Entradas y rechaza el cobro si el total o la cantidad no coinciden (I1).
+  useEffect(() => {
+    if (claveReserva === null) return;
+    const reserva = leerReserva(new URLSearchParams(claveReserva));
+    if (!reserva) return;
+    if (reserva === 'invalida') return; // el estado inicial ya muestra el error
+    let cancelado = false;
+    crearTransaccion(reserva)
+      .then(async (trx) => {
+        if (cancelado) return;
+        if (trx.estado_pago !== 'PENDIENTE') {
+          const final = await obtenerPago(trx.id_pago);
+          if (!cancelado) {
+            setPago(final);
+            setCarga({ estado: 'listo', existente: null });
+          }
+        } else if (!trx.client_secret) {
+          setCarga({ estado: 'error', mensaje: 'No pudimos preparar el pago. Inténtalo de nuevo en unos minutos.', volverAEntradas: true });
+        } else {
+          setCarga({
+            estado: 'listo',
+            existente: {
+              id_pago: trx.id_pago,
+              id_reserva: trx.id_reserva,
+              monto: reserva.total,
+              client_secret: trx.client_secret,
+              cantidad: reserva.cantidad_entradas,
+            },
+          });
+        }
+      })
+      .catch((e: unknown) => {
+        if (cancelado || (e instanceof ErrorApi && e.status === 401)) return; // 401: ya se redirige al login
+        setCarga({
+          estado: 'error',
+          mensaje: e instanceof Error ? e.message : 'No pudimos preparar el pago.',
+          volverAEntradas: true,
+        });
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, [claveReserva]);
+
+  const reservaUrl = claveReserva === null ? null : leerReserva(new URLSearchParams(claveReserva));
+  const cantidadReserva = reservaUrl && reservaUrl !== 'invalida' ? reservaUrl.cantidad_entradas : undefined;
   const existente = carga.estado === 'listo' ? carga.existente : null;
   const destinatarioInicial = carga.estado === 'listo' ? (carga.destinatario ?? null) : null;
 
@@ -115,6 +199,11 @@ export default function CheckoutPage() {
         {carga.urlStripe && (
           <a href={carga.urlStripe} className="font-semibold underline">
             Ir a pagar en Stripe
+          </a>
+        )}
+        {carga.volverAEntradas && (
+          <a href={'/entradas'} className="font-semibold underline">
+            Volver a Entradas
           </a>
         )}
       </div>
@@ -141,13 +230,16 @@ export default function CheckoutPage() {
       <section className="flex-grow w-full max-w-[1200px] mx-auto px-4 md:px-6 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           <div className="lg:col-span-7 xl:col-span-8">{contenido}</div>
-          <div className="lg:col-span-5 xl:col-span-4 sticky top-24">
-            <OrderSummary
-              pedido={pedido}
-              existente={existente ?? (pago ? { id_reserva: pago.id_reserva, monto: pago.monto } : null)}
-              cargando={carga.estado === 'cargando' && !pago}
-            />
-          </div>
+          {/* Si la reserva de Entradas no se pudo validar, no se muestra un resumen que no corresponde. */}
+          {!(carga.estado === 'error' && carga.volverAEntradas) && (
+            <div className="lg:col-span-5 xl:col-span-4 sticky top-24">
+              <OrderSummary
+                pedido={pedido}
+                existente={existente ?? (pago ? { id_reserva: pago.id_reserva, monto: pago.monto, cantidad: cantidadReserva } : null)}
+                cargando={carga.estado === 'cargando' && !pago}
+              />
+            </div>
+          )}
         </div>
       </section>
     </div>
