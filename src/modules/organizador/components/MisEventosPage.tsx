@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Calendar, CheckCircle2 } from "lucide-react";
 import { eliminarEvento, publicarEvento } from "../api";
 import Modal from "./Modal";
 import { useSesion } from "./SesionContext";
@@ -51,22 +52,22 @@ export default function MisEventosPage() {
       if (res?.resultado === "CANCELADO") {
         actualizarEventoLocal(res.evento);
         setAviso(
-          `El evento "${modal.evento.nombre_evento}" tiene entradas vendidas, así que se canceló en vez de eliminarse.`
+          `El evento "${modal.evento.nombre_evento}" tiene entradas vendidas, por lo que fue cancelado en vez de eliminarse.`
         );
       } else {
         quitarEventoLocal(modal.evento.id_evento);
-        setAviso(`Evento "${modal.evento.nombre_evento}" eliminado.`);
+        setAviso(`Evento "${modal.evento.nombre_evento}" eliminado correctamente.`);
       }
       setModal(null);
     } catch (err: any) {
       if (err?.codigo === "ENTRADAS_UNAVAILABLE" || err?.status === 503) {
         setErrorModal(
-          "No se pudo consultar el stock. El evento no se eliminó; intenta más tarde."
+          "No se pudo consultar el inventario de entradas. El evento no se eliminó; inténtalo nuevamente más tarde."
         );
       } else if (err?.codigo === "EVENT_NOT_OWNED" || err?.status === 403) {
-        setErrorModal("No tienes permiso sobre este evento.");
+        setErrorModal("No tienes permisos sobre este evento.");
       } else if (err?.status === 401) {
-        setErrorModal("Tu sesión no es válida o expiró.");
+        setErrorModal("Tu sesión no es válida o ha expirado.");
       } else {
         setErrorModal(err?.message || "No se pudo eliminar el evento.");
       }
@@ -83,7 +84,7 @@ export default function MisEventosPage() {
       const publicado = await publicarEvento(modal.evento.id_evento);
       actualizarEventoLocal({ ...modal.evento, ...publicado });
       setAviso(
-        `Evento "${publicado.nombre_evento}" publicado. Ya es visible en el catálogo público.`
+        `Evento "${publicado.nombre_evento}" publicado exitosamente. Ya se encuentra disponible en el catálogo público.`
       );
       setModal(null);
     } catch (err: any) {
@@ -107,7 +108,8 @@ export default function MisEventosPage() {
     <div className={styles.misEventosPage}>
       {aviso && (
         <div role="status" className={styles.avisoExito}>
-          {aviso}
+          <CheckCircle2 size={18} strokeWidth={2} />
+          <span>{aviso}</span>
         </div>
       )}
 
@@ -115,15 +117,17 @@ export default function MisEventosPage() {
         <div>
           <h1>Mis eventos</h1>
           <p className={styles.descripcion}>
-            Crea y publica los eventos de tu cartelera. Los cambios se reflejan en
-            el catálogo público.
+            Gestiona los eventos de tu cartelera. Publica eventos para que sean visibles
+            en el catálogo y consulta su detalle en tiempo real.
           </p>
         </div>
         <Boton
-          variante="primario"
-          onClick={() => router.push("/organizador/nuevo")}
+          variante="secundario"
+          className={styles.btnNuevo}
+          disabled
+          title="Disponible en la entrega final"
         >
-          + Nuevo evento
+          + Nuevo evento (Disponible en la entrega final)
         </Boton>
       </div>
 
@@ -140,7 +144,26 @@ export default function MisEventosPage() {
 
       {eventosFiltrados.length === 0 ? (
         <div className={styles.vacio}>
-          <p>No hay eventos que coincidan con este filtro.</p>
+          <div className={styles.vacioIcono}>
+            <Calendar size={48} strokeWidth={1.5} />
+          </div>
+          {eventos.length === 0 ? (
+            <>
+              <h3 className={styles.vacioTitulo}>Aún no tienes eventos registrados</h3>
+              <p className={styles.vacioTexto}>
+                Tu cartelera está vacía en este momento. Cuando se habilite la creación
+                en la entrega final, podrás crear y publicar tus eventos desde aquí.
+              </p>
+            </>
+          ) : (
+            <>
+              <h3 className={styles.vacioTitulo}>No se encontraron eventos</h3>
+              <p className={styles.vacioTexto}>
+                No hay eventos que coincidan con el filtro o término de búsqueda seleccionado.
+                Prueba cambiando el estado o limpiando el buscador.
+              </p>
+            </>
+          )}
         </div>
       ) : (
         <div className={styles.lista}>
@@ -149,7 +172,6 @@ export default function MisEventosPage() {
               key={evento.id_evento}
               evento={evento}
               onPublicar={(e) => setModal({ tipo: "publicar", evento: e })}
-              onEditar={(e) => router.push(`/organizador/${e.id_evento}/editar`)}
               onEliminar={(e) => setModal({ tipo: "eliminar", evento: e })}
             />
           ))}
@@ -179,7 +201,7 @@ export default function MisEventosPage() {
             </>
           }
         >
-          <p>¿Publicar este evento? Será visible en el catálogo público.</p>
+          <p>¿Publicar este evento? Será visible de inmediato en el catálogo público para todos los compradores.</p>
           <p>
             <strong>{modal.evento.nombre_evento}</strong>
           </p>
@@ -211,24 +233,10 @@ export default function MisEventosPage() {
           }
         >
           <p>
-            Si es un borrador o no tiene entradas vendidas, se elimina. Si ya
-            vendió entradas, se cancela y se avisa a los compradores.
+            Si el evento es un borrador o no tiene entradas vendidas, se eliminará permanentemente.
+            Si ya tiene entradas vendidas, se cancelará automáticamente para proteger a los compradores.
           </p>
           {errorModal && <p className={styles.errorTexto}>{errorModal}</p>}
-        </Modal>
-      )}
-
-      {modal?.tipo === "sprint" && (
-        <Modal
-          titulo="Disponible en un próximo sprint"
-          onCerrar={cerrarModal}
-          acciones={
-            <Boton variante="primario" onClick={cerrarModal}>
-              Entendido
-            </Boton>
-          }
-        >
-          <p>{modal.mensaje}</p>
         </Modal>
       )}
     </div>

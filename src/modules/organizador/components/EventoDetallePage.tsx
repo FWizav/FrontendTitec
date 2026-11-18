@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { CheckCircle2, ArrowLeft, Check, Trash2, Edit3 } from "lucide-react";
 import { eliminarEvento, obtenerEvento, publicarEvento, ApiError } from "../api";
 import { useSesion } from "./SesionContext";
 import Boton from "./Boton";
@@ -70,7 +71,7 @@ export default function EventoDetallePage() {
       setEvento((prev: any) => ({ ...prev, ...publicado }));
       actualizarEventoLocal({ ...evento, ...publicado });
       setAviso(
-        `Evento "${publicado.nombre_evento}" publicado. Ya es visible en el catálogo público.`
+        `Evento "${publicado.nombre_evento}" publicado exitosamente. Ya es visible en el catálogo público.`
       );
       setModalPublicar(false);
     } catch (err: any) {
@@ -120,7 +121,9 @@ export default function EventoDetallePage() {
 
   if (loading) {
     return (
-      <div className={styles.mensajeEstado}>Cargando evento...</div>
+      <div className={styles.mensajeEstado}>
+        <p>Cargando información del evento...</p>
+      </div>
     );
   }
 
@@ -148,7 +151,8 @@ export default function EventoDetallePage() {
     <div className={styles.detallePage}>
       {aviso && (
         <div role="status" className={styles.avisoExito}>
-          {aviso}
+          <CheckCircle2 size={18} strokeWidth={2} />
+          <span>{aviso}</span>
         </div>
       )}
 
@@ -158,7 +162,8 @@ export default function EventoDetallePage() {
             variante="secundario"
             onClick={() => router.push("/organizador")}
           >
-            ← Volver
+            <ArrowLeft size={16} strokeWidth={2} style={{ marginRight: 4 }} />
+            Volver
           </Boton>
           <h2>{evento.nombre_evento}</h2>
           <BadgeEstado estado={evento.estado_gestion} />
@@ -166,20 +171,23 @@ export default function EventoDetallePage() {
         <div className={styles.botonera}>
           <Boton
             variante="secundario"
-            onClick={() => router.push(`/organizador/${evento.id_evento}/editar`)}
+            disabled
+            title="Disponible en la entrega final"
           >
-            Editar
+            <Edit3 size={15} strokeWidth={2} style={{ marginRight: 4 }} />
+            Editar (Disponible en la entrega final)
           </Boton>
           <Boton
             variante="primario"
             disabled={!esBorrador}
             title={
               esBorrador
-                ? "Publicar evento"
+                ? "Publicar evento en el catálogo"
                 : "Sólo un evento en Borrador puede publicarse"
             }
             onClick={() => setModalPublicar(true)}
           >
+            <Check size={15} strokeWidth={2} style={{ marginRight: 4 }} />
             Publicar
           </Boton>
           <Boton
@@ -192,6 +200,7 @@ export default function EventoDetallePage() {
             }
             onClick={() => setModalEliminar(true)}
           >
+            <Trash2 size={15} strokeWidth={2} style={{ marginRight: 4 }} />
             Eliminar
           </Boton>
         </div>
@@ -200,7 +209,7 @@ export default function EventoDetallePage() {
       <div className={styles.tarjetaDetalles}>
         <h3>Detalles del evento</h3>
         <div className={styles.gridCampos}>
-          <div>
+          <div className={styles.columnaDatos}>
             <p>
               <strong>Descripción:</strong> {evento.descripcion}
             </p>
@@ -211,47 +220,48 @@ export default function EventoDetallePage() {
               <strong>Fecha:</strong> {evento.fecha_evento}
             </p>
             <p>
-              <strong>Hora:</strong> {evento.hora_evento}{" "}
-              {evento.hora_fin_evento ? `- ${evento.hora_fin_evento}` : ""}
+              <strong>Horario:</strong> {evento.hora_evento}{" "}
+              {evento.hora_fin_evento ? `hasta ${evento.hora_fin_evento}` : ""}
             </p>
             <p>
               <strong>Categoría:</strong> {evento.categoria || "Sin categoría"}
             </p>
           </div>
-          <div>
+          <div className={styles.columnaDatos}>
             <p>
-              <strong>ID Evento:</strong> {evento.id_evento}
+              <strong>ID Evento:</strong> <code>{evento.id_evento}</code>
             </p>
             <p>
-              <strong>Tipo entrada:</strong> {evento.tipo_entrada || "-"}
+              <strong>Tipo de entrada:</strong>{" "}
+              {evento.tipo_entrada === "PAGADA" ? "Pagada" : "Gratuita"}
             </p>
             {evento.tipo_entrada === "PAGADA" && (
               <p>
-                <strong>Precio:</strong> ${evento.precio}
+                <strong>Precio:</strong> ${evento.precio} CLP
               </p>
             )}
             <p>
-              <strong>Cantidad de entradas:</strong>{" "}
-              {evento.cantidad_entradas ?? "-"}
+              <strong>Capacidad / Entradas:</strong>{" "}
+              {evento.cantidad_entradas ?? "No especificado"}
             </p>
             <p>
-              <strong>Creado el:</strong>{" "}
-              {new Date(evento.fecha_creacion).toLocaleString()}
+              <strong>Fecha de creación:</strong>{" "}
+              {new Date(evento.fecha_creacion).toLocaleDateString()}
             </p>
             <p>
-              <strong>Actualizado el:</strong>{" "}
-              {new Date(evento.fecha_actualizacion).toLocaleString()}
+              <strong>Última actualización:</strong>{" "}
+              {new Date(evento.fecha_actualizacion).toLocaleDateString()}
             </p>
           </div>
         </div>
         {evento.imagen && (
           <div className={styles.imagenContenedor}>
             <p>
-              <strong>Imagen:</strong>
+              <strong>Imagen del evento:</strong>
             </p>
             <img
               src={evento.imagen}
-              alt="Imagen del evento"
+              alt={evento.nombre_evento}
               className={styles.imagen}
             />
           </div>
@@ -287,7 +297,7 @@ export default function EventoDetallePage() {
             </>
           }
         >
-          <p>¿Publicar este evento? Será visible en el catálogo público.</p>
+          <p>¿Publicar este evento? Será visible en el catálogo público para todos los compradores.</p>
           <p>
             <strong>{evento.nombre_evento}</strong>
           </p>
@@ -325,8 +335,8 @@ export default function EventoDetallePage() {
           }
         >
           <p>
-            Si es un borrador o no tiene entradas vendidas, se elimina. Si ya
-            vendió entradas, se cancela y se avisa a los compradores.
+            Si el evento es un borrador o no tiene entradas vendidas, se eliminará permanentemente.
+            Si ya vendió entradas, se cancelará automáticamente para resguardar a los compradores.
           </p>
           {errorModal && <p className={styles.errorTexto}>{errorModal}</p>}
         </Modal>

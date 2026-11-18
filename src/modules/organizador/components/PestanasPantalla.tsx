@@ -29,17 +29,18 @@ export default function PestanasPantalla({ activa }: PestanasPantallaProps) {
       </button>
       <button
         role="tab"
-        aria-selected={activa === "crear"}
-        className={`${styles.pestana} ${activa === "crear" ? styles.activa : ""}`}
-        onClick={() => router.push("/organizador/nuevo")}
+        aria-selected={false}
+        className={styles.pestana}
+        title="Disponible en la entrega final"
+        disabled
       >
-        02 · Crear / Editar
+        02 · Crear / Editar (Disponible en la entrega final)
       </button>
       <button
         role="tab"
         aria-selected={false}
         className={styles.pestana}
-        title="Se elimina desde cada evento (Sprint 3 · HU-03)"
+        title="Se elimina desde cada evento en el listado"
         disabled
       >
         03 · Eliminar

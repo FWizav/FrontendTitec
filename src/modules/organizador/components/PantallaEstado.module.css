@@ -1,5 +1,5 @@
 .pantallaEstado {
-  min-height: 60vh;
+  min-height: 55vh;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -10,24 +10,29 @@
 }
 
 .pantallaEstado h2 {
-  max-width: 420px;
+  max-width: 460px;
   margin: 0;
   font-family: var(--font-display, inherit);
   font-size: var(--fs-h2, 20px);
+  font-weight: 700;
   color: var(--color-text-primary, #2f4374);
 }
 
 .pantallaEstado p {
-  max-width: 420px;
+  max-width: 460px;
   margin: 0;
   color: var(--color-text-secondary, #6b7a9a);
   font-size: var(--fs-body, 14px);
   line-height: 1.5;
 }
 
+.enlaceLogin {
+  margin-top: var(--space-2, 8px);
+}
+
 .spinner {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   border: 3px solid var(--color-border, #d8dff0);
   border-top-color: var(--color-accent, #2f4374);

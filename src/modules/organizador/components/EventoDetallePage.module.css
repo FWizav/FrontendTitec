@@ -3,11 +3,13 @@
   max-width: 900px;
   margin: 0 auto;
   font-family: inherit;
+  width: 100%;
 }
 
 .avisoExito {
   background-color: var(--color-success-bg, #e2f4ea);
   color: var(--color-success-text, #1a6640);
+  border: 1px solid #c2e8d3;
   padding: var(--space-3, 16px);
   border-radius: var(--radius-control, 8px);
   margin-bottom: var(--space-4, 24px);
@@ -34,13 +36,15 @@
 .tituloGrupo h2 {
   margin: 0;
   font-family: var(--font-display, inherit);
-  font-size: var(--fs-h2, 20px);
+  font-size: var(--fs-h2, 22px);
+  font-weight: 700;
   color: var(--color-text-primary, #2f4374);
 }
 
 .botonera {
   display: flex;
   gap: var(--space-2, 8px);
+  flex-wrap: wrap;
 }
 
 .tarjetaDetalles {
@@ -48,51 +52,87 @@
   padding: var(--space-4, 24px);
   border-radius: var(--radius-card, 12px);
   border: var(--border-standard, 1px solid #d8dff0);
-  box-shadow: var(--shadow-card, 0 1px 3px rgba(47, 67, 116, 0.08));
+  box-shadow: var(--shadow-card, 0 2px 8px rgba(47, 67, 116, 0.08));
 }
 
 .tarjetaDetalles h3 {
   margin-top: 0;
+  margin-bottom: var(--space-3, 16px);
   font-family: var(--font-display, inherit);
-  font-size: var(--fs-h3, 16px);
+  font-size: var(--fs-h3, 18px);
+  font-weight: 600;
   color: var(--color-text-primary, #2f4374);
 }
 
 .gridCampos {
   display: grid;
-  grid-templateColumns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: var(--space-3, 16px);
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--space-4, 24px);
 }
 
-.gridCampos p {
-  margin: var(--space-1, 4px) 0;
+.columnaDatos p {
+  margin: 0 0 var(--space-2, 8px) 0;
   font-size: var(--fs-body, 14px);
-  line-height: 1.5;
+  line-height: 1.6;
   color: var(--color-text-primary, #2f4374);
 }
 
-.gridCampos strong {
+.columnaDatos strong {
   color: var(--color-text-primary, #2f4374);
+  font-weight: 600;
 }
 
 .imagenContenedor {
-  margin-top: var(--space-3, 16px);
+  margin-top: var(--space-4, 24px);
+  border-top: 1px solid var(--color-border, #d8dff0);
+  padding-top: var(--space-3, 16px);
 }
 
 .imagen {
   max-width: 100%;
-  max-height: 300px;
+  max-height: 320px;
   border-radius: var(--radius-control, 8px);
+  object-fit: cover;
 }
 
 .mensajeEstado {
-  padding: var(--space-5, 32px);
+  min-height: 45vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   text-align: center;
+  gap: var(--space-3, 16px);
+  padding: var(--space-5, 32px);
   color: var(--color-text-secondary, #6b7a9a);
 }
 
 .errorTexto {
   color: var(--color-danger-text, #b3261e);
-  margin-bottom: var(--space-4, 24px);
+  margin-bottom: var(--space-3, 16px);
   font-size: var(--fs-body, 14px);
+  max-width: 440px;
+}
+
+@media (max-width: 768px) {
+  .topBar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .tituloGrupo {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .botonera {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .gridCampos {
+    grid-template-columns: 1fr;
+  }
 }

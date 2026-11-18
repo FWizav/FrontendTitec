@@ -2,8 +2,9 @@
 
 import React from "react";
 import { useRouter } from "next/navigation";
-import { MapPin, Pencil, Check, Trash2 } from "lucide-react";
+import { MapPin, Eye, Check, Trash2, Edit3 } from "lucide-react";
 import BadgeEstado from "./BadgeEstado";
+import Boton from "./Boton";
 import styles from "./TarjetaEvento.module.css";
 
 const MESES = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"];
@@ -24,7 +25,6 @@ interface TarjetaEventoProps {
 export default function TarjetaEvento({
   evento,
   onPublicar,
-  onEditar,
   onEliminar,
 }: TarjetaEventoProps) {
   const router = useRouter();
@@ -41,87 +41,104 @@ export default function TarjetaEvento({
     fn?.(evento);
   };
 
-  const manejarClickTarjeta = () => {
+  const irADetalle = (e: React.MouseEvent) => {
+    e.stopPropagation();
     router.push(`/organizador/${evento.id_evento}`);
   };
-
-  const manejarTeclaTarjeta = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") manejarClickTarjeta();
-  };
-
-  const manejarEditar = onEditar
-    ? accion(onEditar)
-    : (e: React.MouseEvent) => {
-        e.stopPropagation();
-        router.push(`/organizador/${evento.id_evento}/editar`);
-      };
 
   return (
     <div
       className={`${styles.tarjetaEvento} ${claseEstado}`}
-      onClick={manejarClickTarjeta}
-      onKeyDown={manejarTeclaTarjeta}
-      role="link"
       tabIndex={0}
-      style={{ cursor: "pointer" }}
+      role="article"
+      aria-label={`Evento ${evento.nombre_evento}`}
     >
-      <div className={styles.fecha}>
-        <span className={styles.mes}>{mes}</span>
-        <span className={styles.dia}>{dia}</span>
-        <span className={styles.hora}>{evento.hora_evento || "—"}</span>
+      {/* Encabezado visible en móvil */}
+      <div className={styles.cabeceraMobile}>
+        <div className={styles.fecha}>
+          <span className={styles.mes}>{mes}</span>
+          <span className={styles.dia}>{dia}</span>
+          <span className={styles.hora}>{evento.hora_evento || "—"}</span>
+        </div>
+        <div className={styles.badgeContenedor}>
+          <BadgeEstado estado={evento.estado_gestion} />
+        </div>
       </div>
 
+      {/* Información del evento */}
       <div className={styles.cuerpo}>
-        <div className={styles.info}>
-          <h3>{evento.nombre_evento}</h3>
-          <div className={styles.meta}>
-            <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-              <MapPin size={16} strokeWidth={2} /> {evento.direccion_evento}
+        <h3 className={styles.titulo}>{evento.nombre_evento}</h3>
+        <div className={styles.meta}>
+          <span className={styles.metaItem}>
+            <MapPin size={15} strokeWidth={2} />
+            <span>{evento.direccion_evento}</span>
+          </span>
+          {evento.categoria && (
+            <span className={styles.metaItem}>
+              <span>· {evento.categoria}</span>
             </span>
-          </div>
+          )}
+          {evento.tipo_entrada && (
+            <span className={styles.metaItem}>
+              <span>
+                · {evento.tipo_entrada === "PAGADA" ? `$${evento.precio ?? 0}` : "Gratis"}
+              </span>
+            </span>
+          )}
         </div>
+      </div>
 
-        <BadgeEstado estado={evento.estado_gestion} />
+      {/* Botones de acción claros */}
+      <div className={styles.acciones}>
+        <Boton
+          variante="secundario"
+          className={styles.btnAccion}
+          title="Ver detalle del evento"
+          onClick={irADetalle}
+        >
+          <Eye size={15} strokeWidth={2} style={{ marginRight: 4 }} />
+          Ver detalle
+        </Boton>
 
-        <div className={styles.acciones}>
-          <button
-            type="button"
-            className={styles.accion}
-            title="Editar evento"
-            aria-label="Editar"
-            onClick={manejarEditar}
-          >
-            <Pencil size={18} strokeWidth={2} />
-          </button>
-          <button
-            type="button"
-            className={`${styles.accion} ${styles.accionSuccess}`}
-            title={
-              esBorrador
-                ? "Publicar evento"
-                : "Sólo un evento en Borrador puede publicarse"
-            }
-            aria-label="Publicar"
-            disabled={!esBorrador}
-            onClick={accion(onPublicar)}
-          >
-            <Check size={18} strokeWidth={2} />
-          </button>
-          <button
-            type="button"
-            className={`${styles.accion} ${styles.accionDanger}`}
-            title={
-              esEliminable
-                ? "Eliminar evento"
-                : "Sólo un evento en Borrador o Publicado puede eliminarse"
-            }
-            aria-label="Eliminar"
-            disabled={!esEliminable}
-            onClick={accion(onEliminar)}
-          >
-            <Trash2 size={18} strokeWidth={2} />
-          </button>
-        </div>
+        <Boton
+          variante="secundario"
+          className={styles.btnAccion}
+          disabled
+          title="Disponible en la entrega final"
+        >
+          <Edit3 size={15} strokeWidth={2} style={{ marginRight: 4 }} />
+          Editar
+        </Boton>
+
+        <Boton
+          variante="primario"
+          className={styles.btnAccion}
+          disabled={!esBorrador}
+          title={
+            esBorrador
+              ? "Publicar evento en el catálogo"
+              : "Sólo eventos en Borrador pueden publicarse"
+          }
+          onClick={accion(onPublicar)}
+        >
+          <Check size={15} strokeWidth={2} style={{ marginRight: 4 }} />
+          Publicar
+        </Boton>
+
+        <Boton
+          variante="peligro"
+          className={styles.btnAccion}
+          disabled={!esEliminable}
+          title={
+            esEliminable
+              ? "Eliminar evento"
+              : "Sólo eventos en Borrador o Publicado pueden eliminarse"
+          }
+          onClick={accion(onEliminar)}
+        >
+          <Trash2 size={15} strokeWidth={2} style={{ marginRight: 4 }} />
+          Eliminar
+        </Boton>
       </div>
     </div>
   );

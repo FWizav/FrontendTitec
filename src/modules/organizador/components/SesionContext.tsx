@@ -5,12 +5,12 @@
  *
  * Según docs/CONTRATO_PANEL_AUTH.md, el Frontend nunca valida el JWT localmente:
  * solo intenta la operación protegida y reacciona al resultado.
- * Por eso, aquí "verificar sesión" = intentar cargar "mis eventos" (GET /events/mios)
+ * Por eso, aquí "verificar sesión" = intentar cargar "mis eventos" (GET /api/organizador/v1/panel/eventos/mios)
  * y reaccionar según la respuesta:
- *   200        -> hay sesión válida y rol organizador; guardamos usuario + eventos
- *   401        -> sesión no válida / expirada -> a la pantalla de "inicia sesión" o redirigir
- *   403        -> autenticado pero sin rol organizador -> "sin autorización"
- *   otro/red   -> error genérico (Fail-Secure: se trata como no autorizado)
+ *   200        -> hay sesión válida y rol organizador; guardamos eventos y mostramos el panel
+ *   401        -> sesión no válida / expirada -> redirigir a /auth/admin/login de inmediato
+ *   403        -> autenticado pero sin rol organizador -> "Acceso restringido a organizadores" sin datos
+ *   otro/red   -> error genérico (Fail-Secure)
  */
 import React, {
   createContext,
@@ -64,11 +64,14 @@ export function SesionProvider({ children }: { children: ReactNode }) {
     } catch (err: any) {
       if (err?.name === "AbortError") return;
       if (err instanceof ApiError && err.status === 401) {
+        if (typeof window !== "undefined") {
+          window.location.assign("/auth/admin/login");
+        }
         setEstado(ESTADO.NO_AUTENTICADO);
       } else if (err instanceof ApiError && err.status === 403) {
         setEstado(ESTADO.SIN_PERMISO);
       } else {
-        setMensajeError(err?.message || "Ocurrió un error inesperado.");
+        setMensajeError(err?.message || "Ocurrió un error inesperado al conectar con el servidor.");
         setEstado(ESTADO.ERROR);
       }
     }
@@ -109,10 +112,10 @@ export function SesionProvider({ children }: { children: ReactNode }) {
     quitarEventoLocal,
   };
 
-  return (
-    <SesionContext.Provider value={value}>
+  // Si no está autorizado, NO mostrar el panel ni BarraContexto ni datos
+  if (estado !== ESTADO.AUTORIZADO) {
+    return (
       <div className={styles.panelOrganizador}>
-        <BarraContexto />
         {estado === ESTADO.CARGANDO && <PantallaEstado tipo="cargando" />}
         {estado === ESTADO.NO_AUTENTICADO && (
           <PantallaEstado
@@ -130,7 +133,15 @@ export function SesionProvider({ children }: { children: ReactNode }) {
             onReintentar={() => verificarSesion()}
           />
         )}
-        {estado === ESTADO.AUTORIZADO && children}
+      </div>
+    );
+  }
+
+  return (
+    <SesionContext.Provider value={value}>
+      <div className={styles.panelOrganizador}>
+        <BarraContexto />
+        {children}
       </div>
     </SesionContext.Provider>
   );
