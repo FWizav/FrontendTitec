@@ -301,6 +301,9 @@ export async function crearReservaTemporal(params: {
   subtotal: number;
   descuento: number;
   total: number;
+  nombreCodigo?: string;
+  idPromocion?: string;
+  porcentajeDescuento?: number;
 }): Promise<ReservaTemporal> {
   const res = await fetch(`${GATEWAY_URL}${BASE_PATH}/reservas/hold`, {
     method: "POST",
@@ -313,6 +316,9 @@ export async function crearReservaTemporal(params: {
       correo_usuario: params.correoUsuario,
       cantidad: params.cantidadEntradas,
       tiempo_limite_minutos: 10,
+      ...(params.nombreCodigo ? { nombre_codigo: params.nombreCodigo } : {}),
+      ...(params.idPromocion ? { id_promocion: params.idPromocion } : {}),
+      ...(params.porcentajeDescuento ? { porcentaje_descuento: params.porcentajeDescuento } : {}),
     }),
     signal: AbortSignal.timeout(4000),
   });

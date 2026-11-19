@@ -221,6 +221,9 @@ export default function EntradasPlaceholder() {
           subtotal: subtotal,
           descuento: montoDescuento,
           total: totalFinal,
+          nombreCodigo: promocionActiva?.codigo,
+          idPromocion: promocionActiva?.idPromocion,
+          porcentajeDescuento: promocionActiva?.porcentajeDescuento ?? 0,
         });
 
         await recargarEventoActivo(eventoActivo.id);
