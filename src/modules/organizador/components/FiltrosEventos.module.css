@@ -1,0 +1,70 @@
+.filtrosEventos {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3, 16px);
+  margin-bottom: var(--space-4, 24px);
+}
+
+.pills {
+  display: flex;
+  gap: var(--space-2, 8px);
+  flex-wrap: wrap;
+}
+
+.pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: var(--radius-pill, 999px);
+  border: var(--border-standard, 1px solid #d8dff0);
+  background: var(--color-surface, #ffffff);
+  color: var(--color-text-secondary, #6b7a9a);
+  font-size: var(--fs-caption, 12px);
+  font-weight: var(--fw-semibold, 600);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s ease;
+}
+
+.pillActivo {
+  background: var(--color-surface-context, #eef1f8);
+  border-color: var(--color-accent, #2f4374);
+  color: var(--color-accent, #2f4374);
+}
+
+.contador {
+  font-size: inherit;
+  font-weight: var(--fw-bold, 700);
+}
+
+.buscador input {
+  height: 40px;
+  min-width: 220px;
+  border-radius: var(--radius-control, 8px);
+  border: var(--border-standard, 1px solid #d8dff0);
+  padding: 0 var(--space-3, 16px);
+  font-size: var(--fs-body, 14px);
+  font-family: inherit;
+  color: var(--color-text-primary, #2f4374);
+  background: var(--color-surface, #ffffff);
+}
+
+.buscador input:focus {
+  outline: none;
+  border-color: var(--color-accent, #2f4374);
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

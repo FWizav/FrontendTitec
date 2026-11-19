@@ -1,0 +1,36 @@
+.editarEventoPage {
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.encabezado {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3, 16px);
+  margin-bottom: var(--space-2, 8px);
+}
+
+.encabezado h1 {
+  margin: 0;
+  font-family: var(--font-display, inherit);
+  font-size: var(--fs-h1, 28px);
+  color: var(--color-text-primary, #2f4374);
+}
+
+.descripcion {
+  color: var(--color-text-secondary, #6b7a9a);
+  font-size: var(--fs-body, 14px);
+  line-height: 1.5;
+  margin-bottom: var(--space-4, 24px);
+}
+
+.mensajeEstado {
+  padding: var(--space-5, 32px);
+  text-align: center;
+  color: var(--color-text-secondary, #6b7a9a);
+}
+
+.errorTexto {
+  color: var(--color-danger-text, #b3261e);
+  margin-bottom: var(--space-4, 24px);
+}

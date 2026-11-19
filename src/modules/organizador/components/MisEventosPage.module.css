@@ -1,0 +1,101 @@
+.misEventosPage {
+  width: 100%;
+}
+
+.encabezado {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-3, 16px);
+  margin-bottom: var(--space-4, 24px);
+}
+
+.encabezado h1 {
+  margin: 0;
+  font-family: var(--font-display, inherit);
+  font-size: var(--fs-h1, 28px);
+  font-weight: 700;
+  color: var(--color-text-primary, #2f4374);
+  line-height: 1.2;
+}
+
+.descripcion {
+  color: var(--color-text-secondary, #6b7a9a);
+  max-width: 540px;
+  margin: var(--space-2, 8px) 0 0 0;
+  font-size: var(--fs-body, 14px);
+  line-height: 1.5;
+}
+
+.avisoExito {
+  background-color: var(--color-success-bg, #e2f4ea);
+  color: var(--color-success-text, #1a6640);
+  border: 1px solid #c2e8d3;
+  padding: var(--space-3, 16px);
+  border-radius: var(--radius-control, 8px);
+  margin-bottom: var(--space-4, 24px);
+  font-size: var(--fs-body, 14px);
+  font-weight: var(--fw-semibold, 600);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lista {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3, 16px);
+}
+
+/* Estado vacío amable */
+.vacio {
+  border: 1px dashed var(--color-border, #d8dff0);
+  border-radius: var(--radius-card, 12px);
+  padding: var(--space-6, 48px) var(--space-4, 24px);
+  text-align: center;
+  color: var(--color-text-secondary, #6b7a9a);
+  background: var(--color-bg-panel, #f8f9fa);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.vacioIcono {
+  margin-bottom: var(--space-3, 16px);
+  color: var(--color-text-secondary, #6b7a9a);
+  opacity: 0.7;
+}
+
+.vacioTitulo {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text-primary, #2f4374);
+  font-family: var(--font-display, inherit);
+}
+
+.vacioTexto {
+  max-width: 440px;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-text-secondary, #6b7a9a);
+}
+
+.errorTexto {
+  color: var(--color-danger-text, #b3261e);
+  margin-top: var(--space-2, 8px);
+}
+
+@media (max-width: 640px) {
+  .encabezado {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .btnNuevo {
+    width: 100%;
+  }
+}

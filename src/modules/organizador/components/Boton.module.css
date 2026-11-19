@@ -1,0 +1,47 @@
+.boton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2, 8px);
+  height: 40px;
+  min-width: var(--min-touch-target, 44px);
+  padding: 0 var(--space-4, 24px);
+  border-radius: var(--radius-control, 8px);
+  border: var(--border-standard, 1px solid #d8dff0);
+  font-size: var(--fs-button, 14px);
+  font-weight: var(--fw-semibold, 600);
+  cursor: pointer;
+  transition: background-color 0.15s ease, opacity 0.15s ease;
+  font-family: inherit;
+}
+
+.boton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.primario {
+  background: var(--color-accent, #2f4374);
+  border-color: var(--color-accent, #2f4374);
+  color: var(--color-text-on-accent, #ffffff);
+}
+.primario:hover:not(:disabled) {
+  background: var(--color-accent-hover, #253558);
+}
+
+.secundario {
+  background: var(--color-surface, #ffffff);
+  color: var(--color-text-primary, #2f4374);
+}
+.secundario:hover:not(:disabled) {
+  background: var(--color-bg-panel, #f8f9fa);
+}
+
+.peligro {
+  background: var(--color-danger-bg, #fdf0f2);
+  border-color: var(--color-danger-bg, #fdf0f2);
+  color: var(--color-danger-text, #b3261e);
+}
+.peligro:hover:not(:disabled) {
+  background: #f9dde1;
+}
