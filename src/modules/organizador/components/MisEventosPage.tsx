@@ -122,12 +122,11 @@ export default function MisEventosPage() {
           </p>
         </div>
         <Boton
-          variante="secundario"
+          variante="primario"
           className={styles.btnNuevo}
-          disabled
-          title="Disponible en la entrega final"
+          onClick={() => router.push("/organizador/nuevo")}
         >
-          + Nuevo evento (Disponible en la entrega final)
+          + Nuevo evento
         </Boton>
       </div>
 
@@ -151,9 +150,17 @@ export default function MisEventosPage() {
             <>
               <h3 className={styles.vacioTitulo}>Aún no tienes eventos registrados</h3>
               <p className={styles.vacioTexto}>
-                Tu cartelera está vacía en este momento. Cuando se habilite la creación
-                en la entrega final, podrás crear y publicar tus eventos desde aquí.
+                Tu cartelera está vacía en este momento. Crea tu primer evento para
+                comenzar a gestionarlo y publicarlo en el catálogo.
               </p>
+              <div style={{ marginTop: 16 }}>
+                <Boton
+                  variante="primario"
+                  onClick={() => router.push("/organizador/nuevo")}
+                >
+                  + Crear mi primer evento
+                </Boton>
+              </div>
             </>
           ) : (
             <>

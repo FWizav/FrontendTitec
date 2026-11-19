@@ -144,6 +144,8 @@ export default function EventoDetallePage() {
   if (!evento) return null;
 
   const esBorrador = evento.estado_gestion === "BORRADOR";
+  const esEditable =
+    evento.estado_gestion === "BORRADOR" || evento.estado_gestion === "PUBLICADO";
   const esEliminable =
     evento.estado_gestion === "BORRADOR" || evento.estado_gestion === "PUBLICADO";
 
@@ -171,11 +173,16 @@ export default function EventoDetallePage() {
         <div className={styles.botonera}>
           <Boton
             variante="secundario"
-            disabled
-            title="Disponible en la entrega final"
+            disabled={!esEditable}
+            title={
+              esEditable
+                ? "Editar evento"
+                : "Sólo un evento en Borrador o Publicado puede editarse"
+            }
+            onClick={() => router.push(`/organizador/${evento.id_evento}/editar`)}
           >
             <Edit3 size={15} strokeWidth={2} style={{ marginRight: 4 }} />
-            Editar (Disponible en la entrega final)
+            Editar
           </Boton>
           <Boton
             variante="primario"

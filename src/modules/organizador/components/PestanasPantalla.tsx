@@ -29,12 +29,11 @@ export default function PestanasPantalla({ activa }: PestanasPantallaProps) {
       </button>
       <button
         role="tab"
-        aria-selected={false}
-        className={styles.pestana}
-        title="Disponible en la entrega final"
-        disabled
+        aria-selected={activa === "crear"}
+        className={`${styles.pestana} ${activa === "crear" ? styles.activa : ""}`}
+        onClick={() => router.push("/organizador/nuevo")}
       >
-        02 · Crear / Editar (Disponible en la entrega final)
+        02 · Crear / Editar
       </button>
       <button
         role="tab"

@@ -33,6 +33,8 @@ export default function TarjetaEvento({
   const claseEstado = styles[estadoClave] || "";
 
   const esBorrador = evento.estado_gestion === "BORRADOR";
+  const esEditable =
+    evento.estado_gestion === "BORRADOR" || evento.estado_gestion === "PUBLICADO";
   const esEliminable =
     evento.estado_gestion === "BORRADOR" || evento.estado_gestion === "PUBLICADO";
 
@@ -103,8 +105,16 @@ export default function TarjetaEvento({
         <Boton
           variante="secundario"
           className={styles.btnAccion}
-          disabled
-          title="Disponible en la entrega final"
+          disabled={!esEditable}
+          title={
+            esEditable
+              ? "Editar evento"
+              : "Sólo eventos en Borrador o Publicado pueden editarse"
+          }
+          onClick={(e) => {
+            e.stopPropagation();
+            router.push(`/organizador/${evento.id_evento}/editar`);
+          }}
         >
           <Edit3 size={15} strokeWidth={2} style={{ marginRight: 4 }} />
           Editar
