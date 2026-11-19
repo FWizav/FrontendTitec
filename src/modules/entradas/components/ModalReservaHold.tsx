@@ -165,6 +165,21 @@ export default function ModalReservaHold({
                 <strong>-${reserva.descuento.toLocaleString("es-CL")}</strong>
               </div>
             )}
+            {reserva.avisoPromocion && (
+              <div
+                style={{
+                  marginBottom: "10px",
+                  padding: "8px 10px",
+                  borderRadius: "6px",
+                  backgroundColor: "#FEF3C7",
+                  color: "#92400E",
+                  fontSize: "12px",
+                  border: "1px solid #F59E0B",
+                }}
+              >
+                ⚠️ {reserva.avisoPromocion}
+              </div>
+            )}
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
               <span style={{ color: THEME.colors.secondary }}>Monto a Cobrar:</span>
               <strong style={{ fontSize: "16px", color: THEME.colors.primary }}>

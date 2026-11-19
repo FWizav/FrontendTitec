@@ -68,6 +68,7 @@ export interface ReservaTemporal {
   subtotal: number;
   descuento: number;
   total: number;
+  avisoPromocion?: string;
   estado: "PENDIENTE" | "RESERVADO" | "APROBADO" | "CANCELADO" | "EXPIRADO" | string;
   expiraEnMinutos: number;             // TTL de retención (10-15 minutos)
   segundosRestantes?: number;          // Segundos restantes devueltos por el backend

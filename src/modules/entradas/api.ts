@@ -320,7 +320,7 @@ export async function crearReservaTemporal(params: {
       ...(params.idPromocion ? { id_promocion: params.idPromocion } : {}),
       ...(params.porcentajeDescuento ? { porcentaje_descuento: params.porcentajeDescuento } : {}),
     }),
-    signal: AbortSignal.timeout(4000),
+    signal: AbortSignal.timeout(6000),
   });
 
   if (!res.ok) {
@@ -329,14 +329,25 @@ export async function crearReservaTemporal(params: {
   }
 
   const data = await res.json();
+  const totalReal = data.monto_total ?? params.total;
+  const descuentoReal =
+    typeof data.porcentaje_descuento === "number" && data.porcentaje_descuento === 0
+      ? 0
+      : Math.max(0, params.subtotal - totalReal);
+  const avisoPromocion =
+    params.nombreCodigo && descuentoReal === 0
+      ? `No se pudo validar el código "${params.nombreCodigo}" con Promociones; la reserva se generó por el precio completo.`
+      : undefined;
+
   return {
     idReserva: data.hold_id || data.id_reserva,
     idEvento: data.id_evento || params.idEvento,
     idUsuario: data.id_usuario || params.idUsuario,
     cantidadEntradas: data.cantidad_entrada || params.cantidadEntradas,
     subtotal: params.subtotal,
-    descuento: params.descuento,
-    total: data.monto_total ?? params.total,
+    descuento: descuentoReal,
+    total: totalReal,
+    avisoPromocion,
     estado: data.estado_reserva || "RESERVADO",
     expiraEnMinutos: 10,
     segundosRestantes: data.tiempo_restante_segundos ?? 600,
