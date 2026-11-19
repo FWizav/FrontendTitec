@@ -25,6 +25,13 @@ export interface ReviewReply {
   createdAt: string;
 }
 
+/** HU3: reporte hecho por el organizador (solo visible para él). */
+export interface ReviewReport {
+  reason: string;
+  /** Fecha ISO */
+  createdAt: string;
+}
+
 export interface Review {
   id: string;
   eventId: string;
@@ -38,6 +45,8 @@ export interface Review {
   createdAt: string;
   /** Respuesta pública del organizador (HU4) */
   reply?: ReviewReply;
+  /** HU3: presente si el organizador ya reportó esta reseña */
+  report?: ReviewReport;
 }
 
 export interface NewReviewInput {

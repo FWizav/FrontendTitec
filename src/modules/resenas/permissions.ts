@@ -52,6 +52,14 @@ export function canReplyToReviews(
   return user !== null && user.id === event.organizerId;
 }
 
+/** HU3: solo el organizador de ese evento puede reportar y eliminar reseñas. */
+export function canModerateReviews(
+  user: CurrentUser | null,
+  event: ReviewEvent,
+): boolean {
+  return user !== null && user.id === event.organizerId;
+}
+
 export const BLOCK_MESSAGES: Record<ReviewBlockReason, string> = {
   guest: "Inicia sesión para dejar tu reseña.",
   organizer: "Como organizador, puedes responder las reseñas de tu evento.",

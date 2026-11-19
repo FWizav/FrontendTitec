@@ -17,6 +17,16 @@ interface ApiReview {
   respuesta_texto?: string | null;
   respuesta_fecha?: string | null;
   nombre_responsable?: string | null;
+  reporte_motivo?: string | null;
+  reporte_fecha?: string | null;
+}
+
+interface ApiReport {
+  id_resena: number;
+  id_evento: string;
+  id_organizador: number;
+  motivo: string;
+  fecha_reporte: string;
 }
 
 interface ApiReply {
@@ -62,6 +72,12 @@ function mapReview(review: ApiReview): Review {
           authorName: review.nombre_responsable ?? "Organizador",
           text: review.respuesta_texto,
           createdAt: review.respuesta_fecha ?? review.fecha_reseña,
+        }
+      : undefined,
+    report: review.reporte_motivo
+      ? {
+          reason: review.reporte_motivo,
+          createdAt: review.reporte_fecha ?? review.fecha_reseña,
         }
       : undefined,
   };
@@ -110,4 +126,40 @@ export async function crearRespuesta(
     },
   );
   return parseResponse<ApiReply>(response);
+}
+
+/**
+ * HU3 · El organizador reporta una reseña indicando el motivo.
+ * POST /api/resenas/:id/reportes  { motivo }
+ * El organizador y el evento los toma el backend desde la sesión (cookie),
+ * el front no los envía: así no se pueden falsificar.
+ */
+export async function reportarResena(
+  reviewId: string,
+  reason: string,
+): Promise<ApiReport> {
+  const response = await fetch(
+    `${BASE_PATH}/${numericId(reviewId, "El ID de la reseña")}/reportes`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ motivo: reason }),
+    },
+  );
+  return parseResponse<ApiReport>(response);
+}
+
+/**
+ * HU3 · El organizador elimina una reseña que reportó antes.
+ * DELETE /api/resenas/:id  (el backend responde 409 si no estaba reportada).
+ */
+export async function eliminarResena(reviewId: string): Promise<void> {
+  const response = await fetch(
+    `${BASE_PATH}/${numericId(reviewId, "El ID de la reseña")}`,
+    { method: "DELETE", credentials: "include" },
+  );
+  if (!response.ok) {
+    await parseResponse<unknown>(response); // lanza con el mensaje de la API
+  }
 }

@@ -6,6 +6,7 @@ import { CheckIcon, InfoIcon, TriangleIcon } from "./icons";
 import { inter, poppins } from "../fonts";
 import {
   BLOCK_MESSAGES,
+  canModerateReviews,
   canReplyToReviews,
   getReviewEligibility,
 } from "../permissions";
@@ -27,7 +28,15 @@ interface ReviewsSectionProps {
 
 export function ReviewsSection({ event, currentUser }: ReviewsSectionProps) {
   const panelId = useId();
-  const { reviews, loading, error, addReview, addReply } = useReviews(event.id);
+  const {
+    reviews,
+    loading,
+    error,
+    addReview,
+    addReply,
+    reportReview,
+    deleteReview,
+  } = useReviews(event.id);
 
   // open: lo que el usuario quiere (abierto/cerrado).
   // mounted: si el panel existe en la página. Al cerrar se mantiene hasta que
@@ -49,6 +58,7 @@ export function ReviewsSection({ event, currentUser }: ReviewsSectionProps) {
     reviews,
   });
   const canReply = canReplyToReviews(currentUser, event);
+  const canModerate = canModerateReviews(currentUser, event);
 
   const total = reviews.length;
   const average = total > 0 ? reviews.reduce((sum, r) => sum + r.rating, 0) / total : 0;
@@ -210,6 +220,9 @@ export function ReviewsSection({ event, currentUser }: ReviewsSectionProps) {
                   key={review.id}
                   review={review}
                   canReply={canReply}
+                  canModerate={canModerate}
+                  onReport={reportReview}
+                  onDelete={deleteReview}
                   onReply={(reviewId, text) =>
                     currentUser
                       ? addReply(reviewId, currentUser, text)
