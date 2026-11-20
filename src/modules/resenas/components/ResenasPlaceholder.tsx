@@ -13,14 +13,48 @@
 // Si se quiere renombrar a "Resenas", hay que coordinarlo con el Grupo 2.
 // ============================================================================
 
+import { useEffect, useState } from "react";
+import { obtenerSesionResenas } from "../api";
 import { getMockEvent } from "../mockData";
-import { useCurrentUser } from "../useCurrentUser";
+import type { CurrentUser } from "../types";
 import { ReviewsSection } from "./ReviewsSection";
 
 export default function ResenasPlaceholder({ eventoId }: { eventoId: string }) {
-  const currentUser = useCurrentUser();
-  // TODO: el evento vendrá de Catálogo.
-  const event = getMockEvent(eventoId);
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const [sessionError, setSessionError] = useState<string | null>(null);
+  const event = { ...getMockEvent(eventoId), status: "finalizado" as const };
 
-  return <ReviewsSection event={event} currentUser={currentUser} />;
+  useEffect(() => {
+    let cancelled = false;
+    obtenerSesionResenas()
+      .then((user) => {
+        if (cancelled) return;
+        setCurrentUser(user);
+        setSessionError(null);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setCurrentUser(null);
+        setSessionError(
+          error instanceof Error
+            ? error.message
+            : "No se pudo validar la sesión con Auth.",
+        );
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return (
+    <div>
+      {sessionError && (
+        <p role="alert">
+          No se pudo consultar la sesión con Auth: {sessionError}
+        </p>
+      )}
+      <ReviewsSection event={event} currentUser={currentUser} />
+    </div>
+  );
 }

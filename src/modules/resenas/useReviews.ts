@@ -54,8 +54,8 @@ export function useReviews(eventId: string) {
   );
 
   const addReview = useCallback(
-    async (user: CurrentUser, input: NewReviewInput) => {
-      const review = await crearResena(eventId, user.id, input);
+    async (input: NewReviewInput) => {
+      const review = await crearResena(eventId, input);
       setReviews((prev) => [review, ...prev.filter((item) => item.id !== review.id)]);
     },
     [eventId],
@@ -63,7 +63,7 @@ export function useReviews(eventId: string) {
 
   const addReply = useCallback(
     async (reviewId: string, author: CurrentUser, text: string) => {
-      const reply = await crearRespuesta(reviewId, author.id, text);
+      const reply = await crearRespuesta(reviewId, text);
       setReviews((prev) =>
         prev.map((review) =>
           review.id === reviewId

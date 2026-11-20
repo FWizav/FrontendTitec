@@ -15,6 +15,7 @@ export interface ReviewEvent {
 export interface CurrentUser {
   id: string;
   name: string;
+  role?: "usuario" | "organizador" | "staff";
 }
 
 export interface ReviewReply {

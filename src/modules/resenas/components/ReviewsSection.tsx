@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { CheckIcon, InfoIcon, TriangleIcon } from "./icons";
 import { inter, poppins } from "../fonts";
 import {
@@ -15,6 +15,7 @@ import { ReviewForm } from "./ReviewForm";
 import { StarDisplay } from "./Stars";
 import type { CurrentUser, NewReviewInput, ReviewEvent } from "../types";
 import { useReviews } from "../useReviews";
+import { verificarElegibilidad, type ReviewEligibilityResult } from "../api";
 import styles from "./reviews.module.css";
 
 /** Cuántas reseñas se ven antes de pulsar "Ver todas las reseñas". */
@@ -48,17 +49,49 @@ export function ReviewsSection({ event, currentUser }: ReviewsSectionProps) {
   const [submittingReview, setSubmittingReview] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const eligibility = getReviewEligibility({
+  const localEligibility = getReviewEligibility({
     event,
     user: currentUser,
-    // El check-in lo valida el backend (responde 403 si el usuario no asistió) y
-    // el mensaje se muestra al intentar publicar. TODO: consultar Check-in antes
-    // de mostrar el formulario (Contrato Check-in).
-    hasCheckIn: true,
+    hasCheckIn: null,
     reviews,
   });
+  const [eligibilityStatus, setEligibilityStatus] = useState<
+    | { state: "idle" }
+    | { state: "pending" }
+    | { state: "loaded"; result: ReviewEligibilityResult }
+    | { state: "error"; message: string }
+  >({ state: "idle" });
   const canReply = canReplyToReviews(currentUser, event);
   const canModerate = canModerateReviews(currentUser, event);
+
+  useEffect(() => {
+    if (!localEligibility.canReview || !currentUser) {
+      setEligibilityStatus({ state: "idle" });
+      return;
+    }
+
+    let cancelled = false;
+    setEligibilityStatus({ state: "pending" });
+    verificarElegibilidad(event.id)
+      .then((result) => {
+        if (!cancelled) setEligibilityStatus({ state: "loaded", result });
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setEligibilityStatus({
+            state: "error",
+            message:
+              error instanceof Error
+                ? error.message
+                : "No pudimos verificar tu asistencia, intenta más tarde.",
+          });
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [event.id, currentUser?.id, localEligibility.canReview]);
 
   const total = reviews.length;
   const average = total > 0 ? reviews.reduce((sum, r) => sum + r.rating, 0) / total : 0;
@@ -78,7 +111,7 @@ export function ReviewsSection({ event, currentUser }: ReviewsSectionProps) {
     setSubmittingReview(true);
     setActionError(null);
     try {
-      await addReview(currentUser, input);
+      await addReview(input);
       setJustPublishedBy(currentUser.id);
     } catch (submitError) {
       setActionError(
@@ -102,7 +135,42 @@ export function ReviewsSection({ event, currentUser }: ReviewsSectionProps) {
         </p>
       );
     }
-    if (eligibility.canReview) {
+    if (!localEligibility.canReview) {
+      if (
+        localEligibility.reason === "already-reviewed" &&
+        currentUser &&
+        justPublishedBy === currentUser.id
+      ) {
+        return (
+          <p className={`${styles.notice} ${styles.noticeSuccess}`} role="status">
+            <CheckIcon />
+            Tu reseña ya está publicada. ¡Gracias por compartir tu experiencia!
+          </p>
+        );
+      }
+      return (
+        <p
+          className={`${styles.notice} ${
+            localEligibility.reason === "already-reviewed" ? styles.noticeSuccess : styles.noticeInfo
+          }`}
+          role="status"
+        >
+          {localEligibility.reason === "already-reviewed" ? <CheckIcon /> : <InfoIcon />}
+          {BLOCK_MESSAGES[localEligibility.reason]}
+        </p>
+      );
+    }
+    if (eligibilityStatus.state === "pending" || eligibilityStatus.state === "idle") {
+      return <p className={styles.notice} role="status">Verificando tu asistencia…</p>;
+    }
+    if (eligibilityStatus.state === "error") {
+      return (
+        <p className={`${styles.notice} ${styles.noticeInfo}`} role="alert">
+          No pudimos verificar tu asistencia, intenta más tarde: {eligibilityStatus.message}
+        </p>
+      );
+    }
+    if (eligibilityStatus.result.puedeResenar) {
       return (
         <>
           {actionError && (
@@ -114,27 +182,18 @@ export function ReviewsSection({ event, currentUser }: ReviewsSectionProps) {
         </>
       );
     }
-    if (
-      eligibility.reason === "already-reviewed" &&
-      currentUser &&
-      justPublishedBy === currentUser.id
-    ) {
+    if (eligibilityStatus.result.motivo === "YA_RESENO") {
       return (
         <p className={`${styles.notice} ${styles.noticeSuccess}`} role="status">
           <CheckIcon />
-          Tu reseña ya está publicada. ¡Gracias por compartir tu experiencia!
+          {BLOCK_MESSAGES["already-reviewed"]}
         </p>
       );
     }
     return (
-      <p
-        className={`${styles.notice} ${
-          eligibility.reason === "already-reviewed" ? styles.noticeSuccess : styles.noticeInfo
-        }`}
-        role="status"
-      >
-        {eligibility.reason === "already-reviewed" ? <CheckIcon /> : <InfoIcon />}
-        {BLOCK_MESSAGES[eligibility.reason]}
+      <p className={`${styles.notice} ${styles.noticeInfo}`} role="status">
+        <InfoIcon />
+        {BLOCK_MESSAGES["no-check-in"]}
       </p>
     );
   }
