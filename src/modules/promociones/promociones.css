@@ -1,0 +1,47 @@
+/*
+ * Estilos del módulo de Promociones (Grupo 9).
+ * Igual que Pagos: Tailwind SOLO para este módulo, sin "preflight" y generando clases
+ * únicamente desde src/modules/promociones, para no alterar el layout común ni a otros grupos.
+ */
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" source(none);
+@source "./";
+
+/* Tokens del estándar visual Ticket-U (mismos valores que usa Pagos). */
+@theme {
+  --color-ticket-primary: #2F4374;
+  --color-ticket-secondary: #6B7A9A;
+  --color-ticket-card: #F8F9FA;
+  --color-ticket-border: #D8DFF0;
+  --color-ticket-banner: #EEF1F8;
+  --color-ticket-hover: #2A3C68;
+  --color-ticket-exito: #1A6640;
+  --color-ticket-exito-bg: #E2F4EA;
+  --color-ticket-peligro: #B3261E;
+  --color-ticket-peligro-bg: #FDF0F2;
+  --color-ticket-inactivo-bg: #F0F0F5;
+  --font-heading: "Poppins", "Inter", system-ui, sans-serif;
+}
+
+.modulo-promociones {
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  color: #1f2937;
+}
+.modulo-promociones h1,
+.modulo-promociones h2,
+.modulo-promociones h3 {
+  font-family: var(--font-heading);
+  color: var(--color-ticket-primary);
+  margin: 0;
+}
+.modulo-promociones input,
+.modulo-promociones select {
+  font: inherit;
+}
+.modulo-promociones button {
+  font: inherit;
+  cursor: pointer;
+}
+.modulo-promociones button:disabled {
+  cursor: not-allowed;
+}
