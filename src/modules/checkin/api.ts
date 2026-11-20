@@ -5,6 +5,7 @@
 // y al microservicio de Entradas (MongoDB).
 // ============================================================================
 
+import { GATEWAY_URL } from "@/lib/env";
 import { ScanResultInfo } from "./types";
 
 export interface ValidacionCheckinResponse {
@@ -34,7 +35,7 @@ async function solicitar<T>(url: string, body?: unknown): Promise<T> {
   const res = await fetch(url, {
     method: body === undefined ? 'GET' : 'POST',
     headers: { 'Content-Type': 'application/json' },
-    credentials: 'same-origin', cache: 'no-store',
+    credentials: 'include', cache: 'no-store',
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const data = await res.json();
@@ -44,7 +45,7 @@ async function solicitar<T>(url: string, body?: unknown): Promise<T> {
 }
 
 export async function validarTicketEnPuerta(params: { idEntrada: string; idEvento: string }): Promise<ValidacionCheckinResponse> {
-  return solicitar('/api/checkin/validaciones', { id_entrada: params.idEntrada.trim(), id_evento: params.idEvento.trim() });
+  return solicitar(GATEWAY_URL.replace(/\/+$/, '') + '/api/checkin/validaciones', { id_entrada: params.idEntrada.trim(), id_evento: params.idEvento.trim() });
 }
 
 export async function registrarTicketEnCheckin(_params: { idEntrada: string; idEvento: string; idUsuario: string; nombreUsuario: string }): Promise<{ mensaje: string }> {

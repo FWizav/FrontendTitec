@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { BrowserQRCodeReader, type IScannerControls } from "@zxing/browser";
+import jsQR from "jsqr";
 import { ArrowLeft, Camera, RefreshCw, AlertCircle } from "./icons";
 import { ScanResultInfo } from "../types";
 import { procesarLecturaQR } from "../api";
@@ -9,13 +9,23 @@ import { procesarLecturaQR } from "../api";
 interface ScannerProps {
   onBack: () => void;
   onScan: (result: ScanResultInfo) => void;
+  availableAt?: number;
 }
 
-export default function ScannerView({ onBack, onScan }: ScannerProps) {
+export default function ScannerView({ onBack, onScan, availableAt = 0 }: ScannerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const scannerControlsRef = useRef<IScannerControls | null>(null);
+  const scannerControlsRef = useRef<{ stop: () => void } | null>(null);
   const decodedRef = useRef(false);
+  const onScanRef = useRef(onScan);
+  useEffect(() => { onScanRef.current = onScan; }, [onScan]);
+  const [waitSeconds, setWaitSeconds] = useState(() => Math.max(0, Math.ceil((availableAt - Date.now()) / 1000)));
+  useEffect(() => {
+    const update = () => setWaitSeconds(Math.max(0, Math.ceil((availableAt - Date.now()) / 1000)));
+    update();
+    const timer = window.setInterval(update, 200);
+    return () => window.clearInterval(timer);
+  }, [availableAt]);
 
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -57,12 +67,12 @@ export default function ScannerView({ onBack, onScan }: ScannerProps) {
 
       try {
         const result = await procesarLecturaQR(qrContent);
-        onScan(result);
+        onScanRef.current(result);
       } finally {
         setIsValidating(false);
       }
     },
-    [stopCamera, onScan]
+    [stopCamera]
   );
 
   // Inicializar cámara y lector
@@ -106,24 +116,48 @@ export default function ScannerView({ onBack, onScan }: ScannerProps) {
         const video = videoRef.current;
         if (!video) throw new Error("No se pudo iniciar el visor de la cámara.");
 
-        // ZXing decodifica los frames sin depender de BarcodeDetector nativo.
-        const reader = new BrowserQRCodeReader(undefined, {
-          delayBetweenScanAttempts: 250,
-          delayBetweenScanSuccess: 500,
-        });
-        const controls = await reader.decodeFromStream(stream, video, (result, _error, controls) => {
-          if (cancelled || decodedRef.current || !result) return;
-          controls.stop();
-          void handleDecodedQR(result.getText());
-        });
-        if (cancelled || decodedRef.current) {
-          controls.stop();
+        video.srcObject = stream;
+        await video.play();
+        if (cancelled) {
           stream.getTracks().forEach((track) => track.stop());
           return;
         }
-        scannerControlsRef.current = controls;
+
+        // Un solo bucle por montaje. La pausa no reinicia ni desmonta la cámara.
+        const canvas = document.createElement("canvas");
+        const context = canvas.getContext("2d", { willReadFrequently: true });
+        if (!context) throw new Error("No se pudo iniciar el detector QR.");
+        let timer: number | undefined;
+        let stopped = false;
+        scannerControlsRef.current = {
+          stop: () => {
+            stopped = true;
+            if (timer !== undefined) window.clearTimeout(timer);
+          },
+        };
+        const scanFrame = () => {
+          if (cancelled || stopped || decodedRef.current) return;
+          let content: string | undefined;
+          if (Date.now() >= availableAt && video.readyState >= 2 && video.videoWidth > 0) {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            try {
+              const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
+              content = jsQR(pixels.data, pixels.width, pixels.height, { inversionAttempts: "attemptBoth" })?.data;
+            } catch {
+              // Un fotograma sin QR legible no es un fallo de la cámara.
+            }
+          }
+          if (content) {
+            void handleDecodedQR(content);
+            return;
+          }
+          timer = window.setTimeout(scanFrame, 250);
+        };
         setHasCameraPermission(true);
         setIsScanning(true);
+        scanFrame();
       } catch (err: unknown) {
         if (cancelled) return;
         stopCamera();
@@ -145,7 +179,7 @@ export default function ScannerView({ onBack, onScan }: ScannerProps) {
       cancelled = true;
       stopCamera();
     };
-  }, [attempt, handleDecodedQR, stopCamera]);
+  }, [attempt, availableAt, handleDecodedQR, stopCamera]);
 
   return (
     <div
@@ -368,7 +402,7 @@ export default function ScannerView({ onBack, onScan }: ScannerProps) {
               }}
             >
               <Camera size={36} color="#9CA3AF" />
-              <span style={{ fontSize: "13px", color: "#D1D5DB" }}>Iniciando cámara...</span>
+              <span style={{ fontSize: "13px", color: "#D1D5DB" }}>{waitSeconds > 0 ? `Siguiente lectura en ${waitSeconds} s. Retira el QR anterior.` : isValidating ? "Validando entrada..." : "Iniciando cámara..."}</span>
             </div>
           )}
         </div>
@@ -382,7 +416,11 @@ export default function ScannerView({ onBack, onScan }: ScannerProps) {
             margin: "0 0 8px 0",
           }}
         >
-          Apunta la cámara al código QR de la entrada para leerlo automáticamente.
+          {waitSeconds > 0
+            ? `Siguiente lectura en ${waitSeconds} s. Retira el QR anterior.`
+            : isValidating
+              ? "Validando entrada..."
+              : "Apunta la cámara al código QR de la entrada para leerlo automáticamente."}
         </p>
       </div>
 

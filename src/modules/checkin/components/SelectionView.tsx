@@ -95,17 +95,6 @@ export default function SelectionView({ onSelectQR, onSelectCode, onSelectMore }
           <span>Ingreso por código secreto</span>
         </button>
 
-        {/* Opción 3: 3 puntos */}
-        <button
-          type="button"
-          style={buttonStyle}
-          onClick={onSelectMore}
-          aria-label="Más opciones"
-          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#24355D")}
-          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#2F4374")}
-        >
-          <MoreHorizontal size={22} color="#FFFFFF" />
-        </button>
       </div>
     </div>
   );
