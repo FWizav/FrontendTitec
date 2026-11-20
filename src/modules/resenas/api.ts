@@ -1,15 +1,12 @@
 import type { NewReviewInput, Review } from "./types";
 import { GATEWAY_URL } from "@/lib/env";
 
-// Todas las llamadas pasan por el API Gateway (/api/resenas/...), nunca directo
-// al microservicio. Para probar en local sin Gateway, apunta
-// NEXT_PUBLIC_GATEWAY_URL a la API de reseñas (por ejemplo http://localhost:5000).
 const BASE_PATH = `${GATEWAY_URL}/api/resenas`;
 
 interface ApiReview {
   num_resena: number;
-  id_usuario: number;
-  id_evento: number;
+  id_usuario: number | string;
+  id_evento: string;
   clasificacion: number;
   descripcion: string | null;
   fecha_reseña: string;
@@ -31,7 +28,7 @@ interface ApiReport {
 
 interface ApiReply {
   id_resena: number;
-  id_usuario: number;
+  id_usuario: number | string;
   texto: string;
   fecha_respuesta: string;
   nombre_responsable: string | null;
@@ -43,6 +40,10 @@ function numericId(value: string, field: string): number {
     throw new Error(`${field} debe ser un número entero positivo.`);
   }
   return id;
+}
+
+function validEventId(value: string): boolean {
+  return value.length > 0 && value.trim() === value && value.length <= 64;
 }
 
 async function parseResponse<T>(response: Response): Promise<T> {
@@ -84,23 +85,27 @@ function mapReview(review: ApiReview): Review {
 }
 
 export async function obtenerResenasDeEvento(eventoId: string): Promise<Review[]> {
-  const id = numericId(eventoId, "El ID del evento");
-  const response = await fetch(`${BASE_PATH}?id_evento=${id}`);
+  if (!validEventId(eventoId)) {
+    throw new Error("El ID del evento debe tener entre 1 y 64 caracteres.");
+  }
+  const response = await fetch(`${BASE_PATH}?id_evento=${encodeURIComponent(eventoId)}`);
   const reviews = await parseResponse<ApiReview[]>(response);
   return reviews.map(mapReview);
 }
 
 export async function crearResena(
   eventoId: string,
-  userId: string,
   input: NewReviewInput,
 ): Promise<Review> {
+  if (!validEventId(eventoId)) {
+    throw new Error("El ID del evento debe tener entre 1 y 64 caracteres.");
+  }
   const response = await fetch(BASE_PATH, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    credentials: "include",
     body: JSON.stringify({
-      id_usuario: numericId(userId, "El ID del usuario"),
-      id_evento: numericId(eventoId, "El ID del evento"),
+      id_evento: eventoId,
       clasificacion: input.rating,
       descripcion: input.comment,
     }),
@@ -109,9 +114,65 @@ export async function crearResena(
   return mapReview(review);
 }
 
+export interface ReviewEligibilityResult {
+  puedeResenar: boolean;
+  motivo: "NO_ASISTIO" | "YA_RESENO" | null;
+}
+
+export async function verificarElegibilidad(
+  eventoId: string,
+): Promise<ReviewEligibilityResult> {
+  if (!validEventId(eventoId)) {
+    throw new Error("El ID del evento debe tener entre 1 y 64 caracteres.");
+  }
+  const params = new URLSearchParams({ eventoId });
+  const response = await fetch(`${BASE_PATH}/eligibilidad?${params.toString()}`, {
+    credentials: "include",
+    cache: "no-store",
+  });
+  const result = await parseResponse<ReviewEligibilityResult>(response);
+  if (
+    !result ||
+    typeof result !== "object" ||
+    typeof result.puedeResenar !== "boolean" ||
+    (result.motivo !== null &&
+      result.motivo !== "NO_ASISTIO" &&
+      result.motivo !== "YA_RESENO") ||
+    (result.puedeResenar && result.motivo !== null) ||
+    (!result.puedeResenar && result.motivo === null)
+  ) {
+    throw new Error("La API devolvió una respuesta de elegibilidad inválida.");
+  }
+  return result;
+}
+
+export interface AuthenticatedReviewUser {
+  id: string;
+  name: string;
+  role: "usuario" | "organizador" | "staff";
+}
+
+export async function obtenerSesionResenas(): Promise<AuthenticatedReviewUser | null> {
+  const response = await fetch(`${BASE_PATH}/me`, {
+    credentials: "include",
+    cache: "no-store",
+  });
+  if (response.status === 401) return null;
+
+  const body = await parseResponse<{ user: AuthenticatedReviewUser }>(response);
+  if (
+    !body?.user ||
+    typeof body.user.id !== "string" ||
+    typeof body.user.name !== "string" ||
+    !["usuario", "organizador", "staff"].includes(body.user.role)
+  ) {
+    throw new Error("La API devolvió un perfil de sesión inválido.");
+  }
+  return body.user;
+}
+
 export async function crearRespuesta(
   reviewId: string,
-  userId: string,
   text: string,
 ): Promise<ApiReply> {
   const response = await fetch(
@@ -119,8 +180,8 @@ export async function crearRespuesta(
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify({
-        id_usuario: numericId(userId, "El ID del usuario"),
         texto: text,
       }),
     },
