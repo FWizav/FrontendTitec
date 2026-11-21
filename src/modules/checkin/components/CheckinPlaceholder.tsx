@@ -12,6 +12,8 @@ export default function CheckinPlaceholder() {
   const [currentView, setCurrentView] = useState<"selection" | "scanner" | "code">("selection");
   const [scanResult, setScanResult] = useState<ScanResultInfo | null>(null);
 
+  const [nextScanAt, setNextScanAt] = useState(0);
+
   // Navegar a vista de escáner QR
   const handleOpenScanner = () => {
     setCurrentView("scanner");
@@ -29,11 +31,13 @@ export default function CheckinPlaceholder() {
 
   // Recepción de resultado tras lectura de QR o validación
   const handleScanSuccess = (result: ScanResultInfo) => {
+    setNextScanAt(Date.now() + 3000);
     setScanResult(result);
   };
 
   // Cierre del modal de resultado
   const handleCloseModal = () => {
+    setCurrentView("selection");
     setScanResult(null);
   };
 
@@ -62,10 +66,11 @@ export default function CheckinPlaceholder() {
         />
       )}
 
-      {currentView === "scanner" && (
+      {currentView === "scanner" && !scanResult && (
         <ScannerView
           onBack={handleBackToSelection}
           onScan={handleScanSuccess}
+          availableAt={nextScanAt}
         />
       )}
 
