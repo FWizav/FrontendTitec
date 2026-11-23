@@ -1,10 +1,6 @@
 // ============================================================================
 // modules/entradas/api.ts
-// ----------------------------------------------------------------------------
-// Capa de API para el Microservicio de Entradas e Inventario (Grupo 3).
-// Obtiene los eventos desde Catálogo (/api/catalogo/eventos) y opera reservas/
-// emisión/disponibilidad contra Entradas (/api/entradas) vía API Gateway.
-// Sin datos mock ni fallbacks locales.
+// Capa de comunicación HTTP para el módulo de Entradas e Inventario vía API Gateway.
 // ============================================================================
 
 import { GATEWAY_URL } from "@/lib/env";
@@ -13,65 +9,13 @@ import {
   EstadoGestionEvento,
   ReservaTemporal,
   EntradaEmitida,
-  PromocionAplicada,
+  ResultadoEvaluacionPromocion,
 } from "./types";
 
 const BASE_PATH = "/api/entradas";
-const CATALOGO_PATH = "/api/catalogo/eventos";
+const PANEL_PROXIMOS_PATH = "/api/organizador/v1/organizador/eventos/proximos";
 
-interface CatalogoEventoRaw {
-  id_evento: string;
-  nombre_evento: string;
-  descripcion_evento?: string;
-  lugar_evento?: string;
-  fecha_evento?: string;
-  hora_evento?: string;
-  precio_final_evento?: number;
-  tipo_evento?: string;
-  estado_evento?: string;
-  stock_actual?: number;
-  stock_inicial?: number;
-  maximo_ticket?: number;
-}
-
-function mapEstadoCatalogo(estado?: string): EstadoGestionEvento {
-  const norm = (estado || "").toLowerCase();
-  if (norm === "cancelado") return "CANCELADO";
-  if (norm === "pasado" || norm === "finalizado") return "FINALIZADO";
-  if (norm === "borrador") return "BORRADOR";
-  return "PUBLICADO";
-}
-
-function mapCatalogoToEventoEntradas(ev: CatalogoEventoRaw): EventoEntradas {
-  const esGratuita = ev.tipo_evento === "gratuito" || Number(ev.precio_final_evento ?? 0) === 0;
-  const stockActual = Number(ev.stock_actual ?? 0);
-  const stockTotal = Number(ev.stock_inicial ?? stockActual);
-
-  return {
-    id: ev.id_evento,
-    titulo: ev.nombre_evento,
-    fecha: ev.fecha_evento
-      ? new Date(ev.fecha_evento).toLocaleDateString("es-CL", {
-          day: "2-digit",
-          month: "long",
-          year: "numeric",
-        })
-      : "Por confirmar",
-    hora: ev.hora_evento || "Por confirmar",
-    lugar: ev.lugar_evento || "Por confirmar",
-    descripcion: ev.descripcion_evento,
-    tipoEntrada: esGratuita ? "GRATUITA" : "PAGADA",
-    precio: esGratuita ? 0 : Number(ev.precio_final_evento ?? 0),
-    stockTotal: stockTotal > 0 ? stockTotal : stockActual,
-    stockDisponible: stockActual,
-    maxTickets: Number(ev.maximo_ticket ?? 6),
-    limiteGratuitoUsuario: esGratuita ? 2 : undefined,
-    estadoGestion: mapEstadoCatalogo(ev.estado_evento),
-    origen: "CATALOGO",
-  };
-}
-
-function mapPanelToEventoEntradas(ev: {
+interface PanelEventoRaw {
   id_evento: string;
   nombre_evento: string;
   descripcion?: string;
@@ -82,7 +26,17 @@ function mapPanelToEventoEntradas(ev: {
   tipo_entrada?: string;
   estado_gestion?: string;
   cantidad_entradas?: number;
-}): EventoEntradas {
+}
+
+function construirQrUrl(idEntrada: string, idEvento: string): string {
+  const payload = JSON.stringify({
+    id_entrada: idEntrada.trim(),
+    id_evento: idEvento.trim(),
+  });
+  return `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(payload)}`;
+}
+
+function mapPanelToEventoEntradas(ev: PanelEventoRaw): EventoEntradas {
   const esGratuita = ev.tipo_entrada !== "PAGADA";
   return {
     id: ev.id_evento,
@@ -102,24 +56,50 @@ function mapPanelToEventoEntradas(ev: {
   };
 }
 
+function mapDetalleBackendAEntradaEmitida(data: Record<string, unknown>): EntradaEmitida {
+  const idEntrada = String(data.id_entrada || "");
+  const idEvento = String(data.id_evento || "");
+  const qrField = data.qr_data;
+  let qrUrl = construirQrUrl(idEntrada, idEvento);
+  if (typeof qrField === "string" && qrField.trim()) {
+    qrUrl = qrField;
+  } else if (qrField && typeof qrField === "object" && "url" in qrField && typeof (qrField as { url?: unknown }).url === "string") {
+    qrUrl = (qrField as { url: string }).url;
+  }
+
+  return {
+    idEntrada,
+    idEvento,
+    nombreEvento: String(data.nombre_evento || `Evento ${idEvento}`),
+    nombreComprador: String(data.nombre_usuario || "Asistente"),
+    correoComprador: String(data.correo_usuario || ""),
+    tipoAcceso: String(data.tipo_acceso || "GENERAL"),
+    precioFinal: Number(data.precio_final_pagado ?? 0),
+    cantidadEntradas: 1,
+    qrData: qrUrl,
+    fechaEvento: String(data.fecha_evento || "Por confirmar"),
+    horaEvento: String(data.hora_evento || "Por confirmar"),
+    lugarEvento: String(data.lugar_ingreso || "Puerta Principal - Acceso General"),
+    fechaEmision: data.fecha_emision
+      ? new Date(String(data.fecha_emision)).toLocaleDateString("es-CL")
+      : new Date().toLocaleDateString("es-CL"),
+    estadoEntrada: String(data.estado_entrada || "EMITIDA"),
+  };
+}
+
 /**
- * Obtiene eventos reales desde Entradas/Panel y también los eventos de Catálogo (marcados como mockup).
+ * Obtiene únicamente los eventos reales creados y publicados en Panel Organizador,
+ * enriquecidos con su stock y disponibilidad real desde el microservicio de Entradas.
  */
 export async function obtenerEventos(): Promise<EventoEntradas[]> {
-  const [resEntradas, resPanel, resCatalogo] = await Promise.allSettled([
+  const [resPanel, resEntradas] = await Promise.allSettled([
+    fetch(`${GATEWAY_URL}${PANEL_PROXIMOS_PATH}?limite=50`, {
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+      signal: AbortSignal.timeout(5000),
+    }),
     fetch(`${GATEWAY_URL}${BASE_PATH}/eventos`, {
-      method: "GET",
-      headers: { "Content-Type": "application/json" },
-      cache: "no-store",
-      signal: AbortSignal.timeout(5000),
-    }),
-    fetch(`${GATEWAY_URL}/api/organizador/v1/organizador/eventos/proximos?limite=50`, {
-      method: "GET",
-      headers: { "Content-Type": "application/json" },
-      cache: "no-store",
-      signal: AbortSignal.timeout(5000),
-    }),
-    fetch(`${GATEWAY_URL}${CATALOGO_PATH}?limite=100`, {
       method: "GET",
       headers: { "Content-Type": "application/json" },
       cache: "no-store",
@@ -127,58 +107,42 @@ export async function obtenerEventos(): Promise<EventoEntradas[]> {
     }),
   ]);
 
-  const panelIds = new Set<string>();
-  const mapaEventos = new Map<string, EventoEntradas>();
-
-  if (resPanel.status === "fulfilled" && resPanel.value.ok) {
-    const panelJson = await resPanel.value.json();
-    if (Array.isArray(panelJson)) {
-      for (const p of panelJson) {
-        if (p?.id_evento) {
-          panelIds.add(p.id_evento);
-          mapaEventos.set(p.id_evento, mapPanelToEventoEntradas(p));
-        }
-      }
-    }
+  if (resPanel.status !== "fulfilled" || !resPanel.value.ok) {
+    throw new Error("No fue posible consultar los eventos publicados en Panel Organizador.");
   }
 
-  const catalogoIds = new Set<string>();
-  if (resCatalogo.status === "fulfilled" && resCatalogo.value.ok) {
-    const catJson = await resCatalogo.value.json();
-    const listaCat: CatalogoEventoRaw[] = Array.isArray(catJson) ? catJson : catJson?.data || [];
-    for (const c of listaCat) {
-      catalogoIds.add(c.id_evento);
-      if (!panelIds.has(c.id_evento)) {
-        mapaEventos.set(c.id_evento, mapCatalogoToEventoEntradas(c));
-      }
+  const panelJson = await resPanel.value.json();
+  const listaPanel: PanelEventoRaw[] = Array.isArray(panelJson) ? panelJson : [];
+
+  const mapaEventos = new Map<string, EventoEntradas>();
+  for (const p of listaPanel) {
+    if (p?.id_evento) {
+      mapaEventos.set(p.id_evento, mapPanelToEventoEntradas(p));
     }
   }
 
   if (resEntradas.status === "fulfilled" && resEntradas.value.ok) {
     const listaEntradas: EventoEntradas[] = await resEntradas.value.json();
     for (const ev of listaEntradas) {
-      const esDePanel = panelIds.has(ev.id) || !catalogoIds.has(ev.id);
+      const existente = mapaEventos.get(ev.id);
+      if (!existente) continue;
       mapaEventos.set(ev.id, {
+        ...existente,
         ...ev,
-        origen: esDePanel ? "PANEL" : "CATALOGO",
+        titulo: ev.titulo && !ev.titulo.startsWith("Evento ") ? ev.titulo : existente.titulo,
+        fecha: ev.fecha && ev.fecha !== "Por confirmar" ? ev.fecha : existente.fecha,
+        hora: ev.hora && ev.hora !== "Por confirmar" ? ev.hora : existente.hora,
+        lugar: ev.lugar && ev.lugar !== "Por confirmar" ? ev.lugar : existente.lugar,
+        origen: "PANEL",
       });
     }
   }
 
-  const resultado = Array.from(mapaEventos.values());
-  if (resultado.length === 0) {
-    throw new Error("No se pudieron cargar eventos ni desde Panel/Entradas ni desde Catálogo.");
-  }
-
-  // Mostrar primero los reales de Panel y luego los de Catálogo
-  return resultado.sort((a, b) => {
-    if (a.origen === b.origen) return 0;
-    return a.origen === "PANEL" ? -1 : 1;
-  });
+  return Array.from(mapaEventos.values());
 }
 
 /**
- * Obtiene un evento específico desde Entradas o Catálogo y sincroniza su stock real.
+ * Obtiene un evento específico de Panel Organizador con su disponibilidad actualizada en Entradas.
  */
 export async function obtenerEventoPorId(eventoId: string): Promise<EventoEntradas | null> {
   try {
@@ -190,47 +154,46 @@ export async function obtenerEventoPorId(eventoId: string): Promise<EventoEntrad
     });
     if (resEnt.ok) {
       const ev: EventoEntradas = await resEnt.json();
-      return {
-        ...ev,
-        origen: eventoId.startsWith("evt-") ? "CATALOGO" : "PANEL",
-      };
+      return { ...ev, origen: "PANEL" };
     }
   } catch {
-    // Continuar con Catálogo si no está en Entradas
+    // Continuar consultando Panel Organizador si aún no se refleja en Entradas
   }
-
-  const res = await fetch(`${GATEWAY_URL}${CATALOGO_PATH}/${encodeURIComponent(eventoId)}`, {
-    method: "GET",
-    headers: { "Content-Type": "application/json" },
-    cache: "no-store",
-    signal: AbortSignal.timeout(5000),
-  });
-
-  if (res.status === 404) return null;
-  if (!res.ok) {
-    const errBody = await res.json().catch(() => ({}));
-    throw new Error(errBody?.message || `Error HTTP ${res.status} al consultar el evento`);
-  }
-
-  const json = await res.json();
-  const raw: CatalogoEventoRaw = json?.data ?? json;
-  const evento = mapCatalogoToEventoEntradas(raw);
 
   try {
-    const disp = await obtenerDisponibilidad(eventoId);
-    evento.stockDisponible = disp.stockDisponible;
-    evento.stockTotal = disp.stockTotal;
-    evento.tipoEntrada = disp.tipoEntrada;
-    evento.precio = disp.precio;
-  } catch {
-    // Si Entradas aún no tiene el evento sincronizado, se mantiene el dato de Catálogo
-  }
+    const resPanel = await fetch(`${GATEWAY_URL}${PANEL_PROXIMOS_PATH}?limite=50`, {
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!resPanel.ok) return null;
+    const panelJson = await resPanel.json();
+    const listaPanel: PanelEventoRaw[] = Array.isArray(panelJson) ? panelJson : [];
+    const encontrado = listaPanel.find((p) => p?.id_evento === eventoId);
+    if (!encontrado) return null;
 
-  return evento;
+    const evento = mapPanelToEventoEntradas(encontrado);
+    try {
+      const disp = await obtenerDisponibilidad(eventoId);
+      evento.stockDisponible = disp.stockDisponible;
+      evento.stockTotal = disp.stockTotal;
+      evento.tipoEntrada = disp.tipoEntrada;
+      evento.precio = disp.precio;
+      if (disp.estadoGestion) {
+        evento.estadoGestion = disp.estadoGestion;
+      }
+    } catch {
+      // Mantener los datos de Panel si la sincronización sigue en curso
+    }
+    return evento;
+  } catch {
+    return null;
+  }
 }
 
 /**
- * Consulta la disponibilidad en tiempo real desde Entradas (MongoDB).
+ * Consulta la disponibilidad en tiempo real del evento.
  */
 export async function obtenerDisponibilidad(eventoId: string): Promise<{
   idEvento: string;
@@ -238,6 +201,7 @@ export async function obtenerDisponibilidad(eventoId: string): Promise<{
   stockTotal: number;
   tipoEntrada: "PAGADA" | "GRATUITA";
   precio: number;
+  estadoGestion?: EstadoGestionEvento;
 }> {
   const res = await fetch(`${GATEWAY_URL}${BASE_PATH}/eventos/${encodeURIComponent(eventoId)}/disponibilidad`, {
     method: "GET",
@@ -247,50 +211,70 @@ export async function obtenerDisponibilidad(eventoId: string): Promise<{
   });
 
   if (!res.ok) {
-    throw new Error(`Error HTTP ${res.status} al consultar disponibilidad en Entradas`);
+    throw new Error(`No se pudo consultar la disponibilidad del evento (HTTP ${res.status}).`);
   }
   return await res.json();
 }
 
 /**
- * Contrato con Promociones (Grupo 9): POST /api/promociones/evaluar
+ * Evalúa un código promocional contra el microservicio de Promociones.
  */
 export async function evaluarPromocion(params: {
   idEvento: string;
   idUsuario: string;
   cantidadEntradas: number;
   codigoPromocion?: string;
-}): Promise<PromocionAplicada | null> {
-  if (!params.codigoPromocion) return null;
+}): Promise<ResultadoEvaluacionPromocion> {
+  const codigo = params.codigoPromocion?.trim().toUpperCase();
+  if (!codigo) return { promocion: null, mensaje: "Ingresa un código promocional." };
 
-  const res = await fetch(`${GATEWAY_URL}/api/promociones/evaluar`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      id_evento: params.idEvento,
-      id_usuario: params.idUsuario,
-      cantidad_entradas: params.cantidadEntradas,
-      codigo_promocion: params.codigoPromocion,
-    }),
-    signal: AbortSignal.timeout(3000),
-  });
+  try {
+    const res = await fetch(`${GATEWAY_URL}/api/promociones/evaluar`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id_evento: params.idEvento,
+        id_usuario: params.idUsuario,
+        cantidad_entradas: params.cantidadEntradas,
+        codigo_promocion: codigo,
+      }),
+      signal: AbortSignal.timeout(4000),
+    });
 
-  if (!res.ok) return null;
-  const data = await res.json();
-  if (data.porcentaje_descuento > 0) {
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return {
+        promocion: null,
+        mensaje: data?.mensaje || "No se pudo validar el código promocional.",
+      };
+    }
+
+    if (Number(data.porcentaje_descuento) > 0) {
+      return {
+        promocion: {
+          codigo,
+          idPromocion: data.id_promocion || "promo-api",
+          porcentajeDescuento: Number(data.porcentaje_descuento),
+          descripcion: data.descripcion || `Descuento del ${data.porcentaje_descuento}% aplicado`,
+        },
+      };
+    }
+
     return {
-      codigo: params.codigoPromocion.toUpperCase(),
-      idPromocion: data.id_promocion || "promo-api",
-      porcentajeDescuento: data.porcentaje_descuento,
-      descripcion: data.descripcion || `Descuento del ${data.porcentaje_descuento}% aplicado`,
+      promocion: null,
+      mensaje: data?.mensaje || "El código promocional no es válido para esta compra.",
+    };
+  } catch {
+    return {
+      promocion: null,
+      mensaje: "El servicio de promociones no está disponible en este momento.",
     };
   }
-
-  return null;
 }
 
 /**
- * HU-03: Crear una Reserva Temporal de Cupos (Hold) en MongoDB
+ * Crea una reserva temporal de cupos (Hold) para iniciar el flujo de pago real.
  */
 export async function crearReservaTemporal(params: {
   idEvento: string;
@@ -311,11 +295,8 @@ export async function crearReservaTemporal(params: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       id_evento: params.idEvento,
-      id_usuario: params.idUsuario,
-      nombre_usuario: params.nombreUsuario,
-      correo_usuario: params.correoUsuario,
       cantidad: params.cantidadEntradas,
-      tiempo_limite_minutos: 10,
+      tiempo_limite_minutos: 15,
       ...(params.nombreCodigo ? { nombre_codigo: params.nombreCodigo } : {}),
       ...(params.idPromocion ? { id_promocion: params.idPromocion } : {}),
       ...(params.porcentajeDescuento ? { porcentaje_descuento: params.porcentajeDescuento } : {}),
@@ -325,7 +306,11 @@ export async function crearReservaTemporal(params: {
 
   if (!res.ok) {
     const errBody = await res.json().catch(() => ({}));
-    throw new Error(errBody?.detail || errBody?.message || `Error HTTP ${res.status} al crear reserva`);
+    const detalle =
+      typeof errBody?.detail === "string"
+        ? errBody.detail
+        : errBody?.detail?.mensaje || errBody?.message || "No se pudo crear la reserva temporal.";
+    throw new Error(detalle);
   }
 
   const data = await res.json();
@@ -336,7 +321,7 @@ export async function crearReservaTemporal(params: {
       : Math.max(0, params.subtotal - totalReal);
   const avisoPromocion =
     params.nombreCodigo && descuentoReal === 0
-      ? `No se pudo validar el código "${params.nombreCodigo}" con Promociones; la reserva se generó por el precio completo.`
+      ? `El código "${params.nombreCodigo}" no pudo aplicarse; la reserva se generó por el monto normal.`
       : undefined;
 
   return {
@@ -349,14 +334,14 @@ export async function crearReservaTemporal(params: {
     total: totalReal,
     avisoPromocion,
     estado: data.estado_reserva || "RESERVADO",
-    expiraEnMinutos: 10,
-    segundosRestantes: data.tiempo_restante_segundos ?? 600,
+    expiraEnMinutos: 15,
+    segundosRestantes: data.tiempo_restante_segundos ?? 900,
     fechaCreacion: data.fecha_creacion || new Date().toISOString(),
   };
 }
 
 /**
- * HU-03: Liberar cupos en MongoDB si la reserva expira o el usuario cancela la orden.
+ * Cancela la reserva temporal y devuelve los cupos al inventario disponible.
  */
 export async function liberarReservaTemporal(
   _idEvento: string,
@@ -366,69 +351,39 @@ export async function liberarReservaTemporal(
   if (!idReserva) return;
   await fetch(`${GATEWAY_URL}${BASE_PATH}/reservas/${encodeURIComponent(idReserva)}/cancelar`, {
     method: "POST",
+    credentials: "include",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ motivo: "Reserva liberada desde el Frontend" }),
-    signal: AbortSignal.timeout(4000),
+    body: JSON.stringify({ motivo: "Reserva cancelada por el usuario" }),
+    signal: AbortSignal.timeout(5000),
   });
 }
 
 /**
- * Consolida una reserva existente en MongoDB (POST /api/entradas/reservas/{idReserva}/webhook-pago)
- */
-export async function consolidarReservaYEmitirTicket(idReserva: string): Promise<string | null> {
-  const res = await fetch(`${GATEWAY_URL}${BASE_PATH}/reservas/${encodeURIComponent(idReserva)}/webhook-pago`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    signal: AbortSignal.timeout(4000),
-  });
-
-  if (!res.ok) return null;
-  const data = await res.json();
-  if (Array.isArray(data.entradas_emitidas) && data.entradas_emitidas.length > 0) {
-    return data.entradas_emitidas[0];
-  }
-  return null;
-}
-
-/**
- * HU-05 y HU-08: Emisión Directa (Flujo Gratuito) o Consolidación tras Pago Aprobado (HU-09).
+ * Emisión directa exclusiva para eventos gratuitos (requiere sesión iniciada).
  */
 export async function emitirEntradaDirecta(params: {
   idEvento: string;
-  idUsuario: string;
-  nombreComprador: string;
-  correoComprador: string;
   cantidadEntradas: number;
-  precioFinal: number;
-  idReserva?: string;
 }): Promise<EntradaEmitida> {
-  if (params.idReserva) {
-    const idTicketBackend = await consolidarReservaYEmitirTicket(params.idReserva);
-    if (idTicketBackend) {
-      const detalle = await obtenerEntradaEmitida(idTicketBackend);
-      if (detalle) return detalle;
-    }
-  }
-
   const res = await fetch(`${GATEWAY_URL}${BASE_PATH}/emision-directa`, {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       id_evento: params.idEvento,
-      id_usuario: params.idUsuario,
-      nombre_comprador: params.nombreComprador,
-      correo_comprador: params.correoComprador,
       cantidad_entradas: params.cantidadEntradas,
-      precio_final: params.precioFinal,
-      id_reserva: params.idReserva || null,
+      precio_final: 0,
     }),
-    signal: AbortSignal.timeout(4000),
+    signal: AbortSignal.timeout(6000),
   });
 
   if (!res.ok) {
     const errBody = await res.json().catch(() => ({}));
-    throw new Error(errBody?.detail || errBody?.message || `Error HTTP ${res.status} al emitir entrada`);
+    const detalle =
+      typeof errBody?.detail === "string"
+        ? errBody.detail
+        : errBody?.detail?.mensaje || errBody?.message || "No se pudo emitir la entrada gratuita.";
+    throw new Error(detalle);
   }
 
   const emitida: EntradaEmitida = await res.json();
@@ -436,45 +391,51 @@ export async function emitirEntradaDirecta(params: {
     try {
       sessionStorage.setItem(`ticket_${emitida.idEntrada}`, JSON.stringify(emitida));
     } catch {
-      // Ignorar errores de storage
+      // Ignorar errores de almacenamiento del navegador
     }
   }
   return emitida;
 }
 
 /**
- * Obtiene la información de un ticket emitido por su ID desde MongoDB (GET /api/entradas/{idEntrada}/detalle)
+ * Obtiene el historial de entradas emitidas del usuario autenticado (HU-04).
+ */
+export async function obtenerMisEntradas(): Promise<EntradaEmitida[]> {
+  const res = await fetch(`${GATEWAY_URL}${BASE_PATH}/mis-entradas`, {
+    method: "GET",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    cache: "no-store",
+    signal: AbortSignal.timeout(5000),
+  });
+
+  if (res.status === 401) {
+    return [];
+  }
+  if (!res.ok) {
+    throw new Error("No se pudo cargar tu historial de entradas.");
+  }
+
+  const lista = await res.json();
+  if (!Array.isArray(lista)) return [];
+  return lista.map((item) => mapDetalleBackendAEntradaEmitida(item));
+}
+
+/**
+ * Obtiene el detalle inmutable de una entrada emitida por su identificador.
  */
 export async function obtenerEntradaEmitida(idEntrada: string): Promise<EntradaEmitida | null> {
   const res = await fetch(`${GATEWAY_URL}${BASE_PATH}/${encodeURIComponent(idEntrada)}/detalle`, {
     method: "GET",
+    credentials: "include",
     headers: { "Content-Type": "application/json" },
     cache: "no-store",
-    signal: AbortSignal.timeout(4000),
+    signal: AbortSignal.timeout(5000),
   });
 
   if (res.ok) {
     const data = await res.json();
-    return {
-      idEntrada: data.id_entrada,
-      idEvento: data.id_evento,
-      nombreEvento: data.nombre_evento,
-      nombreComprador: data.nombre_usuario,
-      correoComprador: data.correo_usuario,
-      tipoAcceso: data.tipo_acceso || "Entrada General",
-      precioFinal: data.precio_final_pagado || 0,
-      cantidadEntradas: 1,
-      qrData:
-        typeof data.qr_data === "string"
-          ? data.qr_data
-          : data.qr_data?.url || `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${data.id_entrada}`,
-      fechaEvento: data.fecha_evento || "Por confirmar",
-      horaEvento: data.hora_evento || "Por confirmar",
-      lugarEvento: data.lugar_ingreso || "Puerta Principal - Acceso General",
-      fechaEmision: data.fecha_emision
-        ? new Date(data.fecha_emision).toLocaleDateString("es-CL")
-        : new Date().toLocaleDateString("es-CL"),
-    };
+    return mapDetalleBackendAEntradaEmitida(data);
   }
 
   if (typeof window !== "undefined") {
