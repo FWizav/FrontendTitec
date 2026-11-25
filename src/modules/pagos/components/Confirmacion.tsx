@@ -75,7 +75,7 @@ export default function Confirmacion({ pago }: { pago: Pago }) {
         {pago.estado_pago === 'APROBADO' ? (
           <>
             <a
-              href={'/entradas'}
+              href={'/entradas?tab=mis-entradas'}
               className="h-10 px-6 bg-ticket-primary text-white text-sm font-semibold rounded-lg hover:bg-ticket-hover transition-colors flex items-center justify-center no-underline"
             >
               Ver mis entradas
