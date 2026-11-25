@@ -58,7 +58,7 @@ export default function DisponibilidadPlaceholder({
   if (cargando) {
     return (
       <div
-        className={styles.card}
+        className={`${styles.entradasModuleScope} ${styles.card}`}
         style={{
           padding: "16px 20px",
           display: "flex",
@@ -77,7 +77,7 @@ export default function DisponibilidadPlaceholder({
   if (errorCarga || !data) {
     return (
       <div
-        className={styles.card}
+        className={`${styles.entradasModuleScope} ${styles.card}`}
         style={{
           padding: "18px 22px",
           backgroundColor: THEME.colors.bgPanel,
@@ -119,7 +119,7 @@ export default function DisponibilidadPlaceholder({
 
   return (
     <div
-      className={styles.card}
+      className={`${styles.entradasModuleScope} ${styles.card}`}
       style={{
         padding: "20px 24px",
         borderLeft: `4px solid ${
